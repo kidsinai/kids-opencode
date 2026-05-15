@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@kidsinai/kids-vfs",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side virtual filesystem with per-(family_id, project_id) namespace isolation. Backs opencode Read/Write/Edit/Glob/Grep tools when invoked by kid sessions.",
+  "license": "MIT",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.0"
+  }
+}

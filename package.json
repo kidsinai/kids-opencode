@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "kids-opencode",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agentic AI coding tool for kids 12+ (Airbotix Kids in AI V0 flagship)",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "bun run --cwd packages/kids-web dev",
+    "typecheck": "bun --filter '*' typecheck",
+    "test": "bun --filter '*' test",
+    "lint": "echo 'TODO: oxlint/eslint config in Phase 1'"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
