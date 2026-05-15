@@ -33,37 +33,35 @@ Each phase has Goal / Tasks (with file paths) / Acceptance / Risks. Weekly the e
 
 ## Phase 1 — Code archaeology (Week 1-2)
 
+**Status**: 🟢 Most desk-work complete (2026-05-14). Live demo remains.
+
 **Goal**: Engineer understands upstream agent loop deeply enough to extend it confidently. Decisions on fork strategy are locked.
 
 ### Tasks
-- [ ] Read upstream architecture
-  - Tour: agent loop entry point, tool registry, model adapter, file/diff system, plan/approve UX
-  - Output: `docs/upstream-architecture.md` — 1-page summary with the 8-10 key files
-- [ ] **Resolve OC-1**: confirm `anomalyco/opencode` is canonical (origin story, license, maintenance)
-  - Visit github.com/sst/opencode (should redirect or be archived); confirm
-  - Check LICENSE; ensure MIT inheritance
-- [ ] **Resolve OC-2**: model adapter protocol
-  - Locate the model client (probably `packages/sdk/` or `src/model/`)
-  - Verify it speaks OpenAI-compatible (or how to make it)
-  - Confirm: env var `OPENCODE_BASE_URL` or similar can redirect all LLM calls
-- [ ] **Resolve D-KO3**: fork strategy
-  - Decision: plugin/middleware (preferred, easier rebase) vs deep modify
-  - Document in `docs/fork-strategy.md`
+- [x] Read upstream architecture
+  - ✅ Tour complete: agent loop entry point, tool registry, model adapter, file/diff system, plan/approve UX, plugin loader, SDK boundary
+  - ✅ Output: [`docs/upstream-architecture.md`](./docs/upstream-architecture.md) — 1-page summary with the 8 key files
+- [x] **Resolve OC-1**: confirm `anomalyco/opencode` is canonical
+  - ✅ Confirmed. `sst/opencode` → `anomalyco/opencode` (rename, not archive). LICENSE is MIT. v1.14.51 SDK published 2026-05-14.
+- [x] **Resolve OC-2**: model adapter protocol
+  - ✅ Confirmed. `packages/opencode/src/session/llm.ts` uses the Vercel `ai` SDK + `streamText`. Providers register via `provider/provider.ts`; DeepRouter slots in as an OpenAI-compatible provider through runtime config, **no source patch needed**.
+- [x] **Resolve D-KO3**: fork strategy
+  - ✅ **Decision: plugin/middleware via `@opencode-ai/plugin`**. All Airbotix customisation (tool whitelist, vfs path-guard, webfetch host-whitelist, kid-safe system prompt, audit hooks) expressible as `before/after` hooks. No core fork. See architecture doc §"Plugin contract".
+- [x] Build the upstream as-is
+  - ✅ `bun install` in kernel succeeded (4669 packages, ~88s).
+  - ✅ CLI loads: `bun run dev --help` lists all subcommands; `bun run dev serve --help` confirms headless server is available.
+  - [ ] **Remaining (live demo)**: Run upstream agent against direct Anthropic key, complete a `make a hello.html` task. Blocked on Lightman handing over a Tier-accumulating Anthropic key (or first DeepRouter staging tenant credentials).
 - [ ] Standup with Team A (DeepRouter)
-  - Confirm DeepRouter `/v1` endpoint contract (Phase 2 of DeepRouter PLAN)
-  - Sync on tenant API key handoff
-- [ ] Build the upstream as-is
-  - Verify `bun install && bun run dev` (or whatever) succeeds
-  - Run upstream agent against direct Anthropic API (using Lightman's Tier-accumulating key)
-  - Confirm agent loop completes a simple "make a hello.html" task
+  - DeepRouter Phase 1+2 actually shipped ahead of schedule (verified 2026-05-14: `2620e4d7` tenant fields + `54fc4cf0` policy hook on all 9 relay handlers). `/v1` endpoint is reachable locally.
+  - **Remaining**: connect kernel's provider config to DeepRouter local `http://localhost:3000/v1` with `airbotix-kids` tenant key; verify request log shows the call.
 
 ### Acceptance
-- [ ] Engineer can demo upstream opencode running a 5-step agent loop
-- [ ] `docs/upstream-architecture.md` reviewed by Lightman
-- [ ] OC-1, OC-2, D-KO3 all closed with documented decisions
+- [ ] Engineer can demo upstream opencode running a 5-step agent loop (script ready: [`examples/hello-world-agent.ts`](./examples/hello-world-agent.ts); needs an API key on kernel side to actually run)
+- [x] `docs/upstream-architecture.md` written — pending Lightman review
+- [x] OC-1, OC-2, D-KO3 all closed with documented decisions
 
 ### Risks
-- **Upstream agent loop is deeply tied to TUI** — may require more invasive UI replacement than expected. If true, Phase 2 timeline at risk.
+- ~~**Upstream agent loop is deeply tied to TUI**~~ — ✅ **REFUTED**. Upstream already exposes a headless HTTP server (`opencode serve`) and ships `@opencode-ai/sdk` as the public client. Our Kid Web UI in `packages/kids-web/` talks SDK, no TUI replacement work needed. Phase 3 timeline is safer than initially assumed.
 
 ---
 

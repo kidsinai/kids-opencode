@@ -16,6 +16,7 @@
     "lint": "echo 'TODO: oxlint/eslint config in Phase 1'"
   },
   "devDependencies": {
+    "@opencode-ai/sdk": "^1.14.51",
     "@types/bun": "latest",
     "typescript": "^5.7.0"
   },
