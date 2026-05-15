@@ -16,7 +16,7 @@ This directory exists because:
 
 | Code | Country | Status | V0 market? | Doc | Lawyer reviewed |
 |---|---|---|---|---|---|
-| `au` | Australia | 🟡 draft (engineering audit only) | ✅ V0 primary | [`au.md`](./au.md) | ❌ pending (L1 in master doc) |
+| `au` | Australia | 🟡 audit + engineering-side substantive answers drafted | ✅ V0 primary | [`au.md`](./au.md), [`au-lawyer-pass.md`](./au-lawyer-pass.md), [`au-oaic-copc-explainer.md`](./au-oaic-copc-explainer.md), [`au-oaic-copc-submission-draft.md`](./au-oaic-copc-submission-draft.md) | ❌ pending (estimated 11-16 lawyer hours; see `au-lawyer-pass.md`) |
 | `us` | United States | ⚪ not started | ⏸️ V2+ | _to be created_ | — |
 | `eu` | European Union | ⚪ not started | ⏸️ V2+ | _to be created_ | — |
 | `uk` | United Kingdom | ⚪ not started | ⏸️ V2+ | _to be created_ | — |

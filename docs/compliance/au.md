@@ -182,16 +182,20 @@ None of these is "done" yet for V0. Each row above corresponds to a Phase in `PL
 
 ## 9. Open items / lawyer TBD
 
-| ID | Question | Owner | Deadline |
-|---|---|---|---|
-| `AU-1` | Confirm Kids OpenCode qualifies for the education exemption from the Social Media Min Age regime. Get written opinion. | Lightman + AU lawyer | V0 -4w |
-| `AU-2` | Draft & file submission to OAIC's Children's Online Privacy Code consultation by 5 June 2026 | Lightman + lawyer | **2026-06-05** (hard) |
-| `AU-3` | Public compliance statement on airbotix.ai/compliance — lawyer drafted | Lightman + lawyer | V0 -2w |
-| `AU-4` | NSW + VIC + QLD state-level school procurement requirements for AI tools — do we need to be on any pre-approved list before B2B sales? | Lightman | V1 |
-| `AU-5` | Notifiable Data Breaches scheme: who, how fast, what threshold for a kid product. Build runbook. | Lightman + lawyer + Team B | V0 |
-| `AU-6` | Statutory tort of privacy (Privacy and Other Legislation Amendment Act 2024): assess our exposure if a kid's data leaks | Lawyer | V0 -2w |
-| `AU-7` | Standards-Australia or CSIRO-aligned AI Safety Assessment template — adopt or design-our-own? | Team B | V0 -2w |
-| `AU-8` | Anthropic "organizations serving minors" review channel: apply for explicit approval if Anthropic offers it (master doc L8) | Lightman | V0 -2w |
+> 🟢 **Engineering-side substantive draft answers for every item below** are in [`au-lawyer-pass.md`](./au-lawyer-pass.md) (2026-05-15). The "Status" column reflects whether the draft answer has been reviewed by a qualified AU lawyer yet.
+
+| ID | Question | Owner | Draft answer | Status |
+|---|---|---|---|---|
+| `AU-1` | Confirm Kids OpenCode qualifies for the education exemption from the Social Media Min Age regime | Lightman + AU lawyer | ✅ Position: clearly qualifies; signed "Sole or Primary Purpose Statement" published; per-feature review on V1+ social-feeling additions. See [`au-lawyer-pass.md`](./au-lawyer-pass.md) §AU-1 | 🟡 lawyer to confirm (1-2h) |
+| `AU-2` | Draft & file submission to OAIC's Children's Online Privacy Code consultation by 5 June 2026 | Lightman | ✅ Drafted. Explainer at [`au-oaic-copc-explainer.md`](./au-oaic-copc-explainer.md); submission letter at [`au-oaic-copc-submission-draft.md`](./au-oaic-copc-submission-draft.md). Lightman polishes + emails to `copc@oaic.gov.au` | 🟡 **2026-06-05 COB (hard deadline)** |
+| `AU-3` | Public compliance statement on airbotix.ai/compliance | Lightman + lawyer | ✅ Drafted in plain English. See [`au-lawyer-pass.md`](./au-lawyer-pass.md) §AU-3 | 🟡 lawyer to confirm (2-3h) + Airbotix-AI/airbotix repo to host |
+| `AU-4` | NSW + VIC + QLD state-level school procurement requirements | Lightman | ✅ Position: V0 direct-to-family is NOT caught by state approval. B2B public-school sales (V1+) require per-state approval, start NSW. Private + Catholic schools can pilot in V0/V1 transition without state list. See [`au-lawyer-pass.md`](./au-lawyer-pass.md) §AU-4 | 🟡 lawyer to confirm (1-2h, fold into broader review) |
+| `AU-5` | NDB scheme runbook | Lightman + lawyer + Team B | ✅ Full runbook drafted (7-step process from awareness → records). See [`au-lawyer-pass.md`](./au-lawyer-pass.md) §AU-5 | 🟡 lawyer to confirm (2-3h) + Phase 4 implementation |
+| `AU-6` | Statutory tort of privacy exposure | Lawyer | ✅ Risk analysis + 4 mitigations (cyber insurance, annual PIA, ToS limitation language, mandatory arbitration for adult terms). See [`au-lawyer-pass.md`](./au-lawyer-pass.md) §AU-6 | 🟡 lawyer to confirm (2-3h) |
+| `AU-7` | AI Safety Assessment template — adopt or design? | Team B | ✅ Position: design our own, align to Voluntary AI Safety Standard + eSafety Safety by Design. Template drafted. See [`au-lawyer-pass.md`](./au-lawyer-pass.md) §AU-7 | 🟡 lawyer to confirm (1h) + Phase 4 first instance |
+| `AU-8` | Anthropic "organizations serving minors" approval | Lightman | ✅ Position: no formal approval exists. Proactive outreach to Anthropic + OpenAI + Doubao compliance teams. See [`au-lawyer-pass.md`](./au-lawyer-pass.md) §AU-8 | 🟡 lawyer to confirm (1h) + Lightman to send emails |
+
+**Total qualified-lawyer time estimate to close all 8: 11-16 hours.** Front-load in Phase 4 (W7-8).
 
 ---
 
