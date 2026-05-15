@@ -46,7 +46,7 @@ packages/
 ## Cross-repo dependencies
 
 - **DeepRouter** (`~/Documents/sites/deeprouter-ai/deeprouter/`) — LLM gateway, V0 critical-path. See its `PLAN.md`.
-- **platform-backend** (`kidsinai/platform-backend`) — Family Account / Stars wallet / Course Pack API / parent dashboard. Tech stack per Airbotix CLAUDE.md (NestJS + Prisma + Neon Postgres + AWS S3 + Airwallex, hosted on AWS EC2 Sydney).
+- **platform-backend** (`Airbotix-AI/platform-backend`) — Family Account / Stars wallet / Course Pack API / parent dashboard. Tech stack per Airbotix CLAUDE.md (NestJS + Prisma + Neon Postgres + AWS S3 + Airwallex, hosted on AWS EC2 Sydney).
 - **opencode-kernel** (`kidsinai/opencode-kernel`) — upstream tracking fork.
 
 ## Development

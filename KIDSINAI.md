@@ -81,7 +81,7 @@ Hard rules: **no Supabase, no Stripe, no Fly.io**. AU user data must stay in `ap
 
 ## Sibling repos
 
-- `kidsinai/creative-web` — Line A creative web (6-11)
-- `kidsinai/platform-backend` — shared NestJS backend (Family / Wallet / Course Pack / Audit)
+- `Airbotix-AI/creative-web` — Line A creative web (6-11)
+- `Airbotix-AI/platform-backend` — shared NestJS backend (Family / Wallet / Course Pack / Audit)
 - `kidsinai/opencode-kernel` — upstream tracking fork
 - `deeprouter-ai/deeprouter` — LLM gateway

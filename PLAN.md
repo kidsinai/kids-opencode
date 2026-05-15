@@ -176,7 +176,7 @@ Each phase has Goal / Tasks (with file paths) / Acceptance / Risks. Weekly the e
   - Switch billing to `workshop_credit_pool` tenant (no family Stars consumed)
   - Show "🎓 Workshop Mode" banner in UI
 - [ ] Course Pack runner
-  - Load Course Pack JSON (from `kidsinai/platform-backend` API)
+  - Load Course Pack JSON (from `Airbotix-AI/platform-backend` API)
   - Display current Mission objectives in agent dialog
   - System prompt augmentation: "You are helping with Mission X. Hint, don't solve."
   - Mission completion check (e.g. `index.html` exists + has required structure)
