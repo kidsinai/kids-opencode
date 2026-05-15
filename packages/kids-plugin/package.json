@@ -1,20 +1,38 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@kidsinai/kids-plugin",
-  "version": "0.0.0",
-  "private": true,
+  "name": "@kidsinai/kids-opencode-plugin",
+  "version": "0.0.1",
   "type": "module",
-  "description": "opencode plugin registering kid-safe constraints: tool whitelist, system prompt layer, audit hooks, Stars meter.",
+  "description": "opencode plugin that turns opencode into a kid-safe coding mentor: kid-safe system prompt, tool whitelist (no shell), DeepRouter routing, audit emission.",
   "license": "MIT",
-  "main": "src/index.ts",
+  "homepage": "https://github.com/kidsinai/kids-opencode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kidsinai/kids-opencode.git",
+    "directory": "packages/kids-plugin"
+  },
+  "keywords": ["opencode", "opencode-plugin", "kids", "education", "k-12", "agentic"],
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@opencode-ai/plugin": "^1.14.50",
-    "@opencode-ai/sdk": "^1.14.50"
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.14.0",
+    "@opencode-ai/sdk": ">=1.14.0"
   },
   "devDependencies": {
+    "@opencode-ai/plugin": "^1.14.51",
+    "@opencode-ai/sdk": "^1.14.51",
     "typescript": "^5.7.0"
   }
 }

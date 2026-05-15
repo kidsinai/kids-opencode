@@ -11,40 +11,21 @@
       },
     },
     "packages/kids-plugin": {
-      "name": "@kidsinai/kids-plugin",
-      "version": "0.0.0",
-      "dependencies": {
-        "@opencode-ai/plugin": "^1.14.50",
-        "@opencode-ai/sdk": "^1.14.50",
-      },
+      "name": "@kidsinai/kids-opencode-plugin",
+      "version": "0.0.1",
       "devDependencies": {
+        "@opencode-ai/plugin": "^1.14.51",
+        "@opencode-ai/sdk": "^1.14.51",
         "typescript": "^5.7.0",
       },
-    },
-    "packages/kids-vfs": {
-      "name": "@kidsinai/kids-vfs",
-      "version": "0.0.0",
-      "devDependencies": {
-        "typescript": "^5.7.0",
-      },
-    },
-    "packages/kids-web": {
-      "name": "@kidsinai/kids-web",
-      "version": "0.0.0",
-      "dependencies": {
-        "@opencode-ai/sdk": "^1.14.50",
-      },
-      "devDependencies": {
-        "typescript": "^5.7.0",
+      "peerDependencies": {
+        "@opencode-ai/plugin": ">=1.14.0",
+        "@opencode-ai/sdk": ">=1.14.0",
       },
     },
   },
   "packages": {
-    "@kidsinai/kids-plugin": ["@kidsinai/kids-plugin@workspace:packages/kids-plugin"],
-
-    "@kidsinai/kids-vfs": ["@kidsinai/kids-vfs@workspace:packages/kids-vfs"],
-
-    "@kidsinai/kids-web": ["@kidsinai/kids-web@workspace:packages/kids-web"],
+    "@kidsinai/kids-opencode-plugin": ["@kidsinai/kids-opencode-plugin@workspace:packages/kids-plugin"],
 
     "@msgpackr-extract/msgpackr-extract-darwin-arm64": ["@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw=="],
 

@@ -75,12 +75,21 @@ export type PluginHooks = {
 The plugin loader reads from `~/.config/opencode/opencode.json` (or per-project `opencode.json`) — declarations look like:
 
 ```json
-{ "plugin": ["@kidsinai/kids-plugin"] }
+{ "plugin": ["@kidsinai/kids-opencode-plugin"] }
 ```
 
 The loader auto-installs the npm package if not present, then dynamically imports it. **This means we do not patch upstream tool files** — we register `before` hooks that mutate args (e.g., add vfs prefix to file paths) or refuse execution (e.g., shell tool).
 
-## SDK boundary (what kids-opencode imports)
+## How kids-opencode actually consumes opencode (revised 2026-05-15)
+
+**V0 is a CLI.** The kid runs `kids-opencode` in their terminal; that's a thin shell wrapper that exec's `opencode --config <ours> ...`. So our consumption pattern is **process composition**, not the SDK.
+
+The SDK is still relevant for:
+- TypeScript type definitions in `@kidsinai/kids-opencode-plugin`
+- Future programmatic tests
+- Future tooling (e.g., automated red-team runners)
+
+Example SDK use (test / tooling only — NOT the kid's path):
 
 ```ts
 import { createOpencode, createOpencodeClient, OpencodeClient } from "@opencode-ai/sdk"
@@ -116,10 +125,7 @@ The two we'll use most in V0:
 
 1. **Effect-based codebase** — upstream is heavily on `effect`/`Layer`/`Context`. Plugins must speak this idiom or use the plugin shim. Check `@opencode-ai/plugin` returns a plain JS surface (yes — confirmed in `packages/plugin/src/index.ts`). 
 2. **`session.prompt` is the unit of agent invocation** — but tool-call streaming happens via the `event` resource. Phase 3 (Kid Web UI) must subscribe to it.
-3. **`@opencode-ai/sdk@^1.14` spawn path** assumes `opencode` CLI on `PATH`. Two options for prod hosting:
-   - bundle a kernel binary in our deploy image
-   - host kernel separately on AWS EC2 Sydney and use `createOpencodeClient({ baseUrl })`
-   The two-repo split makes option B natural.
+3. ~~**`@opencode-ai/sdk@^1.14` spawn path** assumes `opencode` CLI on `PATH`.~~ **Resolved (2026-05-15)**: V0 is a CLI, so `opencode` on PATH is exactly what we want — the user's `install.sh` installs the upstream binary as the first step. No deployment headache, no hosted server, no Fly.io/EC2 question for the V0 kid path.
 4. **Permission engine** (`packages/opencode/src/permission/`) is real — we may want to bind it to the kid UI "同意 / 修改 / 取消" buttons rather than handling approval purely in our plugin.
 
 ## Phase 1 acceptance items addressed

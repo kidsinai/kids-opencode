@@ -2,9 +2,24 @@
 
 > Audit / engineering reference for launching **Kids OpenCode** in Australia (V0 primary market). Not legal advice. **Mandatory qualified-AU-lawyer review before V0 launch** (master doc item L1 still pending).
 
-**Snapshot date**: 2026-05-15
+**Snapshot date**: 2026-05-15 (CLI-first revision)
 **Last lawyer review**: ❌ pending (master doc item L1)
 **Status**: 🟡 engineering audit only — facts compiled from public sources; conclusions must be lawyer-verified before relying on any "we are exempt / we comply" claim externally
+
+---
+
+## 0. CLI distribution context (revised 2026-05-15)
+
+V0 is a **command-line tool installed on the family's own machine** (`kids-opencode` via `curl ... | sh`). Kid code never reaches Airbotix infrastructure. Only the LLM round-trips reach our servers — and only via DeepRouter, which sees prompts + completions, not project files.
+
+**What this changes vs. a hosted-web model**:
+- ✅ Kid project files stay on the family's device → much smaller data-residency surface for Airbotix (we don't host their `index.html`)
+- ✅ No cookies / localStorage / browser fingerprints collected by us when the kid is coding
+- ✅ Webfetch host whitelisting is enforced client-side by the plugin (defence-in-depth even before DeepRouter)
+- ⚠️ Audit log of tool use still flows to `Airbotix-AI/platform-backend` for managed-mode families (deferred from V0 plugin to platform-backend integration in Phase 5)
+- ⚠️ Prompts + completions still flow through DeepRouter and are subject to provider Terms (Anthropic / OpenAI / Doubao) and AU obligations on Airbotix as the deployer
+
+**BYOK mode** (the family supplies their own provider key, paying the LLM bill directly): Airbotix is no longer the deployer for that family. Our client-side plugin still enforces tool whitelist + system prompt, but server-side moderation (run by DeepRouter) is bypassed. **Recommend BYOK only for parents technical enough to read the privacy implications.** Marketing-page disclosure required.
 
 ---
 
@@ -54,17 +69,17 @@ Practical: assume **any eSafety transparency notice arrives with 30 days to resp
 
 | Obligation | Source | Implemented in | Owner | Status |
 |---|---|---|---|---|
-| **Disclose to user that they are interacting with AI** | Anthropic AUP + OpenAI U18 Guidance + Voluntary AI Standard guardrail 6 | `packages/kids-plugin/` (system prompt) + `packages/kids-web/` (UI label always visible) | Team B | 🟡 designed |
+| **Disclose to user that they are interacting with AI** | Anthropic AUP + OpenAI U18 Guidance + Voluntary AI Standard guardrail 6 | `packages/kids-plugin/src/system-prompt.ts` (rule #5: "Never pretend to be human"); terminal banner emitted by wrapper on startup | Team B | ✅ implemented in plugin |
 | **Age-appropriate content moderation in + out** | OSA BOSE §6 + Anthropic Help Center 9307344 | `deeprouter-ai/deeprouter` Phase 4 (content moderation pipeline) | Team A | 🟡 Phase 4 not started |
 | **Zero Data Retention on OpenAI calls for kid tenant** | OpenAI U18 Guidance | `deeprouter-ai/deeprouter` policy middleware (`kids_mode=true` → `store: false` injection) | Team A | ✅ landed (commits `2620e4d7` + `54fc4cf0`) — verify covers all paths |
 | **No PII leaked to upstream provider in metadata** | OpenAI U18 + Anthropic AUP | DeepRouter `kids` package — strip identifying metadata before forward | Team A | ✅ landed |
-| **Default privacy: kid project private; sharing requires affirmative action** | Privacy Act APPs (data minimisation, default privacy) + COPC draft + OSA BOSE | `Airbotix-AI/platform-backend` (sharing endpoint with default-deny + audit) + `packages/kids-web/` (UI default off) | platform team + Team B | 🟡 not implemented |
+| **Default privacy: kid project local-only; sharing is opt-in and goes through airbotix-app cloud** | Privacy Act APPs (data minimisation, default privacy) + COPC draft + OSA BOSE | CLI keeps project local; sharing happens in `Airbotix-AI/airbotix-app` cloud SPA with explicit kid+parent action | platform team | ✅ structurally enforced (V0 CLI has no sharing surface) |
 | **Parental consent records, immutable, exportable** | Privacy Act APP 1 + 5 + 11 + COPC draft | `Airbotix-AI/platform-backend` (auth/consent audit table; export endpoint) | platform team | 🟡 not implemented |
 | **One-click data export (kid + family)** | Privacy Act APP 12; COPC draft | `Airbotix-AI/platform-backend` + family dashboard UI | platform team | 🔴 V0 blocker (master doc C9) |
 | **One-click account deletion + downstream wipe** | Privacy Act APP 11 + COPC draft | platform-backend + DeepRouter audit-trim job | platform team | 🔴 V0 blocker (master doc C9) |
 | **No training-data use of kid content; stated publicly** | OpenAI ToS + COPP draft + market expectation | `airbotix-ai/airbotix` (public privacy policy) + provider config (we don't opt in) | Lightman + Lawyer | 🔴 V0 blocker (master doc C12) |
 | **No third-party advertising** | OSA BOSE + child-product market expectation | Platform business model (Stars Pack, no ads) | Lightman | ✅ business-locked |
-| **Audit log: every agent tool call, retrievable for 90 days hot + 3 years cold** | Anthropic Help Center 9307344 + OAIC enforcement posture | `Airbotix-AI/platform-backend` audit table + DeepRouter request log | platform + Team A | 🟡 schema not finalised |
+| **Audit log: every agent tool call, retrievable for 90 days hot + 3 years cold** | Anthropic Help Center 9307344 + OAIC enforcement posture | `packages/kids-plugin/src/index.ts` emits structured stderr lines for V0 (`tool.execute.before` / `tool.execute.after` / `tool.blocked.*`); Phase 5 integration POSTs them to `Airbotix-AI/platform-backend` `/api/audit` for managed-mode families. DeepRouter keeps the LLM-request log independently. | Team B + platform + Team A | 🟡 plugin emits; persistence pipeline Phase 5 |
 | **Incident response: notify family + (per Privacy Act) OAIC for eligible data breach** | Privacy Act Pt IIIC (NDB scheme) | Runbook in `Airbotix-AI/planning/` (TBD); on-call rotation | Lightman | 🔴 V0 blocker |
 | **Public-facing compliance statement on airbotix.ai** | Anthropic Help Center 9307344 ("clearly stated on organization's public-facing documentation") | `Airbotix-AI/airbotix` marketing site | Lightman | 🔴 V0 blocker (master doc C10) |
 | **System prompt version registry, exportable on regulator request** | OAIC enforcement posture + Anthropic audit | DeepRouter config repo (git-tagged versions) | Team A | 🟡 versioning convention TBD |
@@ -182,24 +197,27 @@ None of these is "done" yet for V0. Each row above corresponds to a Phase in `PL
 
 ## 10. Implementation responsibility map
 
-| Concern | `kids-opencode` (this repo) | `Airbotix-AI/platform-backend` | `deeprouter-ai/deeprouter` | `Airbotix-AI/airbotix` (marketing) |
-|---|:--:|:--:|:--:|:--:|
-| Kid-facing AI disclosure (system prompt + UI label) | ✅ | | | |
-| Tool whitelist / sandbox / vfs path-guard | ✅ | | | |
-| iframe sandbox + CSP for class wall | ✅ | | | |
-| Agent audit emission (per tool call) | ✅ (emit) | ✅ (persist) | | |
-| Parental consent capture | | ✅ | | |
-| Stars wallet / billing | | ✅ | ✅ (webhook source) | |
-| Default-private project sharing | ✅ (UI default) | ✅ (API default) | | |
-| Data export / one-click delete | | ✅ | | |
-| Input content moderation (prompts) | | | ✅ | |
-| Output content moderation (LLM responses) | | | ✅ | |
-| OpenAI ZDR injection | | | ✅ | |
-| Anthropic policy compliance forward (metadata strip, system prompt) | | | ✅ | |
-| Audit log retention 90d hot / 3y cold | | ✅ (kid-platform side) | ✅ (LLM-request side) | |
-| Public privacy policy + terms + consent forms | | | | ✅ |
-| Compliance statement page | | | | ✅ |
-| Incident response runbook | ✅ (product-specific) | ✅ (platform-wide) | ✅ (gateway-specific) | |
+| Concern | `kids-opencode` CLI (this repo) | `Airbotix-AI/platform-backend` | `deeprouter-ai/deeprouter` | `Airbotix-AI/airbotix-app` (cloud SPA) | `Airbotix-AI/airbotix` (marketing) |
+|---|:--:|:--:|:--:|:--:|:--:|
+| Kid-facing AI disclosure (system prompt + terminal banner) | ✅ | | | | |
+| Tool whitelist (no shell), webfetch host allowlist | ✅ | | | | |
+| Project-folder confinement | ✅ (opencode `read` / `write` / `edit` are cwd-scoped by upstream design + plugin verifies) | | | | |
+| Agent audit emission (per tool call) | ✅ (stderr V0; HTTP POST Phase 5) | ✅ (persist when ingested) | | | |
+| Parental consent capture | | ✅ | | ✅ (UI flow) | |
+| DeepRouter tenant key issuance for family | | ✅ | | ✅ (parent dashboard) | |
+| Stars wallet / billing | | ✅ | ✅ (webhook source) | ✅ (UI) | |
+| Sharing kid project (only via cloud opt-in; never from CLI) | N/A (CLI is local-only by design) | ✅ (API) | | ✅ (UI) | |
+| Data export / one-click delete (managed-mode kids' data) | | ✅ | | ✅ (UI) | |
+| Input content moderation (prompts) | (defence-in-depth, plugin tool-args check) | | ✅ (primary) | | |
+| Output content moderation (LLM responses) | | | ✅ | | |
+| OpenAI ZDR injection | | | ✅ | | |
+| Anthropic policy compliance forward (metadata strip, system prompt) | | | ✅ | | |
+| Audit log retention 90d hot / 3y cold | | ✅ (kid-platform side) | ✅ (LLM-request side) | | |
+| Public privacy policy + terms + consent forms | | | | | ✅ |
+| Compliance statement page | | | | | ✅ |
+| BYOK-mode disclosure ("no Airbotix moderation in this mode") | ✅ (terminal warning at startup) | | | | ✅ (download page) |
+| Install signature / supply-chain integrity | ✅ (script will sign in V1) | | | | ✅ (HTTPS + checksum) |
+| Incident response runbook | ✅ (product-specific) | ✅ (platform-wide) | ✅ (gateway-specific) | | |
 
 ---
 
@@ -261,4 +279,5 @@ Search & analysis date: 2026-05-15
 
 | Version | Date | Author | Note |
 |---|---|---|---|
+| 0.2 | 2026-05-15 | Engineering audit (Claude assist) | Revised for V0 CLI-first product shape. Added §0 (CLI distribution context); collapsed responsibility matrix to reflect that kid project files stay local; added BYOK-mode disclosure obligation. Substantive compliance posture unchanged. |
 | 0.1 | 2026-05-15 | Engineering audit (Claude assist) | Initial AU-specific compliance audit. Captures 2026-05-15 state of OSA/Social Media Min Age (in force), COPC (exposure draft consultation 31 Mar – 5 Jun 2026), Voluntary AI Safety Standard, and eSafety AI-companion enforcement precedent. **Not lawyer-reviewed.** |

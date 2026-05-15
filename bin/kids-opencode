@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+#
+# kids-opencode — kid-safe wrapper around `opencode`.
+#
+# After `curl -fsSL https://airbotix.ai/install/kids | sh` (or manual install),
+# this script ends up in the user's PATH. It exec's `opencode` with our
+# bundled kid-safe config and plugin pre-loaded.
+#
+# Anything we want kid-safe (system prompt, tool whitelist, DeepRouter
+# routing, audit hooks) lives in:
+#   - the @kidsinai/kids-opencode-plugin npm package (the actual hooks)
+#   - the config at ${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}
+#
+# Both are installed by install.sh during first-time setup. To override:
+#   KIDS_OPENCODE_CONFIG=/path/to/your/config.json kids-opencode
+set -e
+
+# Resolve our default config location
+CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
+
+if [ ! -f "$CONFIG" ]; then
+  echo "kids-opencode: config not found at $CONFIG" >&2
+  echo "" >&2
+  echo "Run the installer first:" >&2
+  echo "  curl -fsSL https://airbotix.ai/install/kids | sh" >&2
+  echo "" >&2
+  echo "Or set KIDS_OPENCODE_CONFIG to point at a config you wrote manually." >&2
+  exit 1
+fi
+
+# Make sure opencode itself is on PATH
+if ! command -v opencode >/dev/null 2>&1; then
+  echo "kids-opencode: 'opencode' binary not found on PATH." >&2
+  echo "" >&2
+  echo "The installer should have placed it. If you installed manually," >&2
+  echo "follow https://opencode.ai/docs/install first." >&2
+  exit 1
+fi
+
+# Forward everything to opencode with our config baked in
+exec opencode --config "$CONFIG" "$@"

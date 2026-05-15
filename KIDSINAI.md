@@ -1,87 +1,109 @@
 # Kids in AI — Kids OpenCode Product Notes
 
-> This file captures the product intent for **Kids OpenCode** — Airbotix Kids in AI's V0 flagship. The upstream `opencode` agent runtime (`anomalyco/opencode`, MIT) is tracked separately in [`kidsinai/opencode-kernel`](https://github.com/kidsinai/opencode-kernel); this repo is **not a fork** of it.
+> Product intent for **Kids OpenCode** — Airbotix Kids in AI's V0 flagship coding mentor. **V0 is a CLI** (`kids-opencode`), installed via `curl ... | sh`, running in the user's terminal. Not a hosted web app, not a desktop GUI. The web portal (parent dashboard, kids-Learn SPA) is a separate Airbotix product (`Airbotix-AI/airbotix-app`).
 
 ## What this repo is
 
-The product layer on top of opencode:
+A thin, kid-safe layer on top of `opencode`:
 
-- Kid-facing web UI (replaces opencode's adult TUI/IDE)
-- Virtual filesystem with per-`(family_id, project_id)` namespace isolation
-- Course-pack runner with kid-safe system prompts
-- Parent audit log (every tool call observable)
-- DeepRouter LLM integration (no direct vendor API calls)
-- Workshop Mode (class context + credit pool)
+- A **plugin** (`@kidsinai/kids-opencode-plugin`) that adds tool-whitelist enforcement, the kid-safe system prompt, webfetch host-whitelisting, and an audit-event emitter.
+- A **config preset** (`config/opencode.json.template`) that pre-wires DeepRouter as the model provider and asks for permission on every tool use.
+- A **wrapper script** (`bin/kids-opencode`) so the kid types one command and gets the kid-safe experience without remembering flags.
+- A **curl installer** (`install.sh`) that orchestrates the three above into one paste-able command.
+- Bundled **course packs** (`course-packs/`) — first one is the personal portfolio mission, more later.
 
 Why this design beats forking opencode directly:
-- Saves 6–12 months of agent-runtime engineering (we don't rebuild plan/approve, tool use, diff/apply)
-- opencode is model-agnostic — DeepRouter slots in via env var
-- We avoid carrying a heavy upstream rebase burden by depending via npm SDK + plugin instead of source
+- We don't carry an upstream-rebase burden. `opencode-kernel` tracks upstream; this repo only consumes via npm.
+- Same `opencode` your CTO uses, with kid-safe defaults swapped in. Easy to audit, easy to teach.
+- Saves 6–12 months of agent-runtime engineering.
 
 ## Two-repo architecture (decided 2026-05-14)
 
 | Repo | Role | Visibility |
 |---|---|---|
-| `kidsinai/kids-opencode` (this) | Product code | Private, MIT |
+| `kidsinai/kids-opencode` (this) | Product code (plugin + config + wrapper + installer + course packs) | Private, MIT |
 | `kidsinai/opencode-kernel` | Pure upstream tracking fork of `anomalyco/opencode` | Public, MIT |
 
 Product code consumes opencode purely via:
 
-- **`@opencode-ai/sdk`** (npm) — client for opencode server (agent loop, tool registry)
-- **`@opencode-ai/plugin`** (npm) — hook/plugin registration
+- **`@opencode-ai/sdk`** (npm) — programmatic types and the SDK client (used by tests and future tooling; the kid CLI itself shells out to `opencode`)
+- **`@opencode-ai/plugin`** (npm) — hook / plugin registration
 
-No source imports from `opencode-kernel`. Local dev: run `opencode-kernel` as a server alongside, point `OPENCODE_BASE_URL` at it.
+No source imports from `opencode-kernel`.
 
-## What we build here
+## V0 product shape (revised 2026-05-15 — CLI-first)
 
-| Where | What | Phase |
+| Layer | What we ship | Where |
 |---|---|---|
-| `packages/kids-web/` | React + Vite + Tailwind + Monaco — 3-pane kid web UI | Phase 3 (W5-6) |
-| `packages/kids-plugin/` | Tool whitelist (no Bash), kid-safe system prompt, audit hooks, Stars meter | Phase 4 (W7-8) |
-| `packages/kids-vfs/` | Virtual FS: path guard + namespace isolation; AWS S3 (Sydney) + Neon Postgres | Phase 4 (W7-8) |
-| iframe preview | `<iframe sandbox="allow-scripts">` for HTML/CSS/JS in kid browser | Phase 4 (W7-8) |
-| DeepRouter adapter | Wire `@opencode-ai/sdk` model client to DeepRouter `/v1` | Phase 2 (W3-4) |
+| **Install** | `curl https://airbotix.ai/install/kids \| sh` | `install.sh` in this repo, served via the airbotix marketing site |
+| **Binary** | `kids-opencode` shell wrapper on PATH | `bin/kids-opencode` |
+| **Plugin** | `@kidsinai/kids-opencode-plugin` (npm published) | `packages/kids-plugin/` |
+| **Config preset** | `~/.config/kids-opencode/opencode.json` | derived from `config/opencode.json.template` |
+| **System prompt** | Bundled in the plugin (canonical source: `config/system-prompt.md`) | `packages/kids-plugin/src/system-prompt.ts` |
+| **Course packs** | First mission ("Personal Portfolio Website") | `course-packs/portfolio-site/` (TBD) |
+
+What we **do not** ship in V0:
+- ❌ Web SPA (deferred to `Airbotix-AI/airbotix-app` if/when needed; not this repo's concern)
+- ❌ Desktop GUI (Tauri/Electron) — deferred V1+
+- ❌ Virtual filesystem layer (kids' code lives on their own machine; no S3, no Supabase Storage in the kid path)
+- ❌ Browser iframe preview (kids open `index.html` in their own browser)
+- ❌ Server-side agent runtime / per-session container
 
 ## V0 scope (NARROW)
 
-- **Languages**: HTML / CSS / JS **only**. No Python, Node, Bash, or shell. No server-side kid-code execution.
-- **Hosting**: Hosted only. V1+ adds Tauri desktop.
-- **Audience**: Kids 12+ (flagship Airbotix narrative).
-- **First Course Pack**: "我的第一个 AI 项目 — 个人作品集网站" (3 Missions, ~30-50 Stars budget).
+- **Languages**: HTML / CSS / JavaScript **only**. Bash and arbitrary command execution are explicitly removed from the agent tool list.
+- **Age**: kids 12+.
+- **Run target**: macOS + Linux. Windows installer is V1.
+- **Provider routing**: DeepRouter by default (managed mode). Bring-your-own-key supported but discouraged for families with kids under 16.
+- **First Course Pack**: "Personal Portfolio Website" (3 missions, ~30-50 Stars budget per family).
 
 ## V1+ expansion (post-PMF)
 
-- Pyodide (Python in browser) — natural first expansion before any server-side container
-- Server-side sandbox (gVisor / Firecracker) — only when course packs really need it
-- Local desktop mode (Tauri preferred over Electron)
-- Robotics bridge (WebUSB → Airbotix mBots)
+- Pyodide (Python in a sandbox the agent can drive) for kids who outgrow HTML/CSS/JS
+- Windows installer
+- Course Pack authoring tool for teachers
+- Robotics Bridge: agent writes `arduino` / `mBot` programs and flashes them over WebUSB (when paired with `Airbotix-AI/airbotix-app`)
+- An optional web wrapper served by `Airbotix-AI/airbotix-app` for families who can't install on their device
 
-## Backend stack (per airbotix CLAUDE.md, locked 2026-05-14)
+## Backend stack used by the managed mode (`Airbotix-AI`)
 
-- Backend API: NestJS + Prisma + Neon Postgres
+When a family uses DeepRouter-managed mode, the supporting backend is:
+
+- Backend API: NestJS + Prisma + Neon Postgres (`Airbotix-AI/platform-backend`)
 - Host: AWS EC2 t3.small Sydney (`ap-southeast-2`) + Docker Compose + nginx
-- Object storage: AWS S3 Sydney (virtual FS blobs)
+- Object storage: AWS S3 Sydney (audit log archives, NOT kid code)
 - Realtime: WebSocket (NestJS Gateway)
-- Auth: JWT + refresh + OTP (SendGrid)
+- Auth: JWT + Refresh + OTP (SendGrid)
 - Payments: Airwallex
 - LLM: DeepRouter `/v1`
 
-Hard rules: **no Supabase, no Stripe, no Fly.io**. AU user data must stay in `ap-southeast-2`.
+Hard rules: **no Supabase, no Stripe, no Fly.io**. AU user data stays in `ap-southeast-2`.
+
+For the **CLI itself**, no Airbotix infrastructure is on the data path — kid code lives in the kid's own folder, the only outbound calls are to DeepRouter (or directly to a provider in BYOK mode).
 
 ## Spec source
 
 | Doc | Location |
 |---|---|
-| Master cross-product plan | `~/Documents/sites/kidsinai/planning/PROJECT.md` |
-| Full technical spec | `~/Documents/sites/airbotix/docs/product/prd/kids-opencode-spec.md` |
+| Master cross-product plan | `~/Documents/sites/Airbotix-AI/planning/PROJECT.md` |
+| Full technical spec (v0.2; **pre-CLI-pivot, stale**) | `~/Documents/sites/airbotix/docs/product/prd/kids-opencode-spec.md` — needs revision |
 | Parent platform PRD | `~/Documents/sites/airbotix/docs/product/prd/kids-ai-platform-prd.md` |
-| Compliance constraints | `~/Documents/sites/airbotix/docs/product/compliance/minors-compliance.md` |
+| Compliance master | `~/Documents/sites/airbotix/docs/product/compliance/minors-compliance.md` |
+| Compliance per-jurisdiction (this repo) | `./docs/compliance/au.md` |
 | DeepRouter (sibling) | `~/Documents/sites/deeprouter-ai/deeprouter/` |
 | Kernel fork (sibling) | `~/Documents/sites/kidsinai/opencode-kernel/` |
 
 ## Sibling repos
 
-- `Airbotix-AI/creative-web` — Line A creative web (6-11)
-- `Airbotix-AI/platform-backend` — shared NestJS backend (Family / Wallet / Course Pack / Audit)
+- `Airbotix-AI/airbotix` — marketing site, `airbotix.ai/install/kids` lives here
+- `Airbotix-AI/airbotix-app` — Parent Portal + Kids Learn SPA (managed-mode parent UX)
+- `Airbotix-AI/platform-backend` — shared NestJS backend (Family / Wallet / Audit / Tenant key issuance)
 - `kidsinai/opencode-kernel` — upstream tracking fork
 - `deeprouter-ai/deeprouter` — LLM gateway
+
+## Revision history
+
+| Version | Date | Note |
+|---|---|---|
+| 0.2 | 2026-05-15 | CLI-first V0 pivot. Dropped kids-web + kids-vfs packages. Wrapper + plugin + installer are the deliverable. |
+| 0.1 | 2026-05-14 | Two-repo split; original hosted-web V0 plan. |
