@@ -3,20 +3,132 @@
 # kids-opencode — kid-safe wrapper around `opencode`.
 #
 # After `curl -fsSL https://airbotix.ai/install/kids | sh` (or manual install),
-# this script ends up in the user's PATH. It exec's `opencode` with our
-# bundled kid-safe config and plugin pre-loaded.
+# this script ends up in the user's PATH. It:
+#   1. Prints an AI-disclosure banner once per session.
+#   2. Translates Kids-OpenCode-specific flags (--course, --mission) into env
+#      vars consumed by @kidsinai/kids-opencode-plugin.
+#   3. Dispatches `kids-opencode check <mission>` to the acceptance runner.
+#   4. Otherwise exec's `opencode` with our bundled kid-safe config preloaded.
 #
-# Anything we want kid-safe (system prompt, tool whitelist, DeepRouter
-# routing, audit hooks) lives in:
-#   - the @kidsinai/kids-opencode-plugin npm package (the actual hooks)
-#   - the config at ${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}
+# All kid-safety enforcement (system prompt, tool whitelist, webfetch
+# allowlist, audit emit) lives in:
+#   - @kidsinai/kids-opencode-plugin (npm)
+#   - $KIDS_OPENCODE_CONFIG (default: ~/.config/kids-opencode/opencode.json)
 #
-# Both are installed by install.sh during first-time setup. To override:
+# Override the config location:
 #   KIDS_OPENCODE_CONFIG=/path/to/your/config.json kids-opencode
 set -e
 
-# Resolve our default config location
+KIDS_OPENCODE_VERSION="0.0.1"
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
+
+# ────────────────────────────────────────────────────────────────────────────
+# Subcommand dispatch (before flag parsing)
+# ────────────────────────────────────────────────────────────────────────────
+
+case "${1:-}" in
+  check)
+    shift
+    # Hand off to the acceptance runner. Bundled with the plugin install.
+    if ! command -v bun >/dev/null 2>&1; then
+      echo "kids-opencode: 'bun' is required for the check subcommand." >&2
+      echo "Install bun: https://bun.sh" >&2
+      exit 1
+    fi
+    PLUGIN_DIR="$(opencode plugin path @kidsinai/kids-opencode-plugin 2>/dev/null || true)"
+    if [ -z "$PLUGIN_DIR" ] || [ ! -d "$PLUGIN_DIR" ]; then
+      # Fallback: try the package node_modules location
+      PLUGIN_DIR="$HOME/.config/opencode/plugins/node_modules/@kidsinai/kids-opencode-plugin"
+    fi
+    if [ ! -f "$PLUGIN_DIR/src/check-runner.ts" ]; then
+      echo "kids-opencode: acceptance runner not found at $PLUGIN_DIR/src/check-runner.ts" >&2
+      echo "Reinstall: curl -fsSL https://airbotix.ai/install/kids | sh" >&2
+      exit 1
+    fi
+    exec bun "$PLUGIN_DIR/src/check-runner.ts" "$@"
+    ;;
+  --version|-v)
+    echo "kids-opencode $KIDS_OPENCODE_VERSION"
+    # Also show underlying opencode version
+    if command -v opencode >/dev/null 2>&1; then
+      printf "  (uses "
+      opencode --version | head -1
+      printf ")"
+    fi
+    echo ""
+    exit 0
+    ;;
+  --kids-help)
+    cat <<'HELPEOF'
+kids-opencode — a kid-safe AI coding mentor.
+
+USAGE
+  kids-opencode                    Start a free-play session in the current folder
+  kids-opencode --course <pack>    Start a Course Pack session
+  kids-opencode --course <pack> --mission <id>
+                                   Start at a specific Mission
+  kids-opencode check <mission>    Check if you finished a Mission
+  kids-opencode --version          Show version
+  kids-opencode --kids-help        Show this help (in plain language for kids)
+
+OPTIONS THAT GO TO THE AGENT
+  Any unrecognised flag (e.g. -m, --model, --print-logs) is passed through to
+  the underlying opencode CLI.
+
+EXAMPLES
+  kids-opencode --course portfolio-site --mission mission-1
+  kids-opencode check mission-1
+
+ENVIRONMENT VARIABLES
+  DEEPROUTER_API_KEY       Your family's API key from app.airbotix.ai
+  KIDS_OPENCODE_CONFIG     Override config path (default: ~/.config/kids-opencode/opencode.json)
+  KIDS_AGE_BAND            Override the age band (default: 12+)
+
+LEARN MORE
+  https://airbotix.ai/kids-opencode
+HELPEOF
+    exit 0
+    ;;
+esac
+
+# ────────────────────────────────────────────────────────────────────────────
+# Flag pre-processing: translate --course / --mission into env vars
+# Anything else is left in the args to be passed to opencode.
+# ────────────────────────────────────────────────────────────────────────────
+
+FORWARD_ARGS=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --course)
+      shift
+      export KIDS_COURSE_PACK="${1:-}"
+      shift
+      ;;
+    --course=*)
+      export KIDS_COURSE_PACK="${1#--course=}"
+      shift
+      ;;
+    --mission)
+      shift
+      export KIDS_MISSION="${1:-}"
+      shift
+      ;;
+    --mission=*)
+      export KIDS_MISSION="${1#--mission=}"
+      shift
+      ;;
+    *)
+      # Pass-through to opencode. We deliberately do NOT shell-escape here;
+      # `exec opencode "$@"` below handles it via positional params.
+      FORWARD_ARGS="$FORWARD_ARGS $1"
+      shift
+      ;;
+  esac
+done
+
+# ────────────────────────────────────────────────────────────────────────────
+# Pre-flight checks
+# ────────────────────────────────────────────────────────────────────────────
 
 if [ ! -f "$CONFIG" ]; then
   echo "kids-opencode: config not found at $CONFIG" >&2
@@ -28,7 +140,6 @@ if [ ! -f "$CONFIG" ]; then
   exit 1
 fi
 
-# Make sure opencode itself is on PATH
 if ! command -v opencode >/dev/null 2>&1; then
   echo "kids-opencode: 'opencode' binary not found on PATH." >&2
   echo "" >&2
@@ -37,5 +148,27 @@ if ! command -v opencode >/dev/null 2>&1; then
   exit 1
 fi
 
-# Forward everything to opencode with our config baked in
-exec opencode --config "$CONFIG" "$@"
+# ────────────────────────────────────────────────────────────────────────────
+# AI-disclosure banner (compliance: every session must disclose AI use)
+# Suppressed if KIDS_OPENCODE_NO_BANNER=1 (used in CI / testing).
+# ────────────────────────────────────────────────────────────────────────────
+
+if [ "${KIDS_OPENCODE_NO_BANNER:-0}" != "1" ]; then
+  cat >&2 <<'BANNER'
+─────────────────────────────────────────────────────────────────
+  Kids OpenCode — you are about to talk to an AI coding mentor.
+
+  The AI is not a real person. It can be wrong. Ask a parent or
+  teacher if you are unsure about anything it says.
+
+  Need help in Australia: Kids Helpline 1800 55 1800 (free, 24/7).
+─────────────────────────────────────────────────────────────────
+BANNER
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
+# Forward to opencode with our config
+# ────────────────────────────────────────────────────────────────────────────
+
+# shellcheck disable=SC2086 # we want word-splitting on FORWARD_ARGS
+exec opencode --config "$CONFIG" $FORWARD_ARGS

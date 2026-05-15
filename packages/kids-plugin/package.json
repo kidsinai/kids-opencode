@@ -20,11 +20,13 @@
   },
   "files": [
     "src",
+    "course-packs",
     "README.md",
     "LICENSE"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.14.0",
@@ -34,5 +36,8 @@
     "@opencode-ai/plugin": "^1.14.51",
     "@opencode-ai/sdk": "^1.14.51",
     "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0"
   }
 }

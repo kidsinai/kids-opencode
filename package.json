@@ -10,10 +10,10 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "bun run --cwd packages/kids-web dev",
     "typecheck": "bun --filter '*' typecheck",
     "test": "bun --filter '*' test",
-    "lint": "echo 'TODO: oxlint/eslint config in Phase 1'"
+    "lint": "echo 'TODO: oxlint/eslint config'",
+    "smoke": "sh -n install.sh && sh -n bin/kids-opencode && bun --filter '*' typecheck"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "^1.14.51",

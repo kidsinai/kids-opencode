@@ -7,12 +7,15 @@
  *   { "plugin": ["@kidsinai/kids-opencode-plugin"] }
  *
  * What it does (V0):
- *   1. Prepends the kid-safe system prompt to every chat turn.
+ *   1. Loads the bundled Course Pack (if KIDS_COURSE_PACK is set) and
+ *      prepends the kid-safe system prompt + pack overlay + mission context.
  *   2. Refuses tool execution for anything outside the V0 whitelist
  *      (defence-in-depth on top of the tool list in config).
- *   3. Emits a minimal audit line for every tool call (sessionID + tool +
- *      sanitised args summary). V0 logs to stderr; V1+ POSTs to
- *      platform-backend /api/audit when a kid is signed in.
+ *   3. Enforces a webfetch host allowlist (MDN / web.dev / W3C / airbotix).
+ *   4. Emits structured audit lines on stderr for every tool call, including
+ *      a per-tool Stars cost estimate so the family wallet can be reconciled
+ *      offline (full Stars accounting happens server-side in DeepRouter +
+ *      platform-backend Phase 5).
  *
  * What it deliberately does NOT do (V0):
  *   - Persist anything (no DB, no filesystem state). Audit lines go to stderr.
@@ -24,6 +27,7 @@
 
 import type { Plugin, Hooks } from "@opencode-ai/plugin"
 import { buildSystemPrompt, type SystemPromptContext } from "./system-prompt.js"
+import { buildOverlay, findMission, loadCoursePack, type CoursePack } from "./course-pack.js"
 
 const ALLOWED_TOOLS = new Set([
   "read",
@@ -41,12 +45,35 @@ const WEBFETCH_HOST_ALLOWLIST = [
   "airbotix.ai",
 ]
 
-function readContextFromEnv(): SystemPromptContext {
+/**
+ * Stars cost estimates per tool invocation. These are intentionally coarse
+ * — exact accounting happens server-side in DeepRouter + platform-backend.
+ * The client-side estimate exists so families can budget without a server
+ * round-trip on every action.
+ */
+const STAR_COST_PER_TOOL: Record<string, number> = {
+  read: 0.5,
+  write: 1,
+  edit: 1,
+  glob: 0.5,
+  grep: 0.5,
+  webfetch: 2,
+}
+
+function readContextFromEnv(pack: CoursePack | null): SystemPromptContext {
+  const missionId = process.env.KIDS_MISSION
+  const mission = pack && missionId ? findMission(pack, missionId) : null
+
   return {
-    course_pack_title: process.env.KIDS_COURSE_PACK,
-    mission_title: process.env.KIDS_MISSION,
-    learning_objectives: process.env.KIDS_OBJECTIVES,
-    kid_age_band: process.env.KIDS_AGE_BAND,
+    course_pack_title: pack?.title ?? process.env.KIDS_COURSE_PACK,
+    mission_title: mission?.title ?? missionId,
+    learning_objectives:
+      process.env.KIDS_OBJECTIVES ??
+      pack?.learning_objectives?.join("; "),
+    kid_age_band:
+      process.env.KIDS_AGE_BAND ??
+      pack?.target_age_band ??
+      "12+",
   }
 }
 
@@ -83,7 +110,7 @@ function summariseArgs(tool: string, args: unknown): string {
   }
 }
 
-function audit(event: string, fields: Record<string, unknown>): void {
+export function audit(event: string, fields: Record<string, unknown>): void {
   const line = {
     ts: new Date().toISOString(),
     component: "kids-opencode-plugin",
@@ -94,14 +121,37 @@ function audit(event: string, fields: Record<string, unknown>): void {
   process.stderr.write(`[kids-audit] ${JSON.stringify(line)}\n`)
 }
 
+export function estimateStarsCost(tool: string): number {
+  return STAR_COST_PER_TOOL[tool] ?? 1
+}
+
 const plugin: Plugin = async (_input, _options) => {
-  audit("plugin.loaded", { version: "0.0.1" })
+  // Load Course Pack at plugin init if requested.
+  const packId = process.env.KIDS_COURSE_PACK
+  const pack: CoursePack | null = packId ? loadCoursePack(packId) : null
+
+  audit("plugin.loaded", {
+    version: "0.0.1",
+    course_pack: pack?.id ?? null,
+    mission: process.env.KIDS_MISSION ?? null,
+  })
+
+  if (packId && !pack) {
+    audit("course_pack.not_found", { requested: packId })
+  }
+
+  const baseContext = readContextFromEnv(pack)
+  const baseSystemPrompt = buildSystemPrompt(baseContext)
+  const overlay = buildOverlay(pack, process.env.KIDS_MISSION)
 
   const hooks: Hooks = {
     "experimental.chat.system.transform": async (_input, output) => {
-      const prompt = buildSystemPrompt(readContextFromEnv())
-      // Prepend the kid-safe layer ahead of anything opencode/agent put in.
-      output.system.unshift(prompt)
+      // Prepend kid-safe layer (and pack overlay if applicable) ahead of anything
+      // opencode/agent put in. The plugin layer always wins.
+      const stitched = overlay
+        ? `${baseSystemPrompt}\n\n${overlay}`
+        : baseSystemPrompt
+      output.system.unshift(stitched)
     },
 
     "tool.execute.before": async (input, output) => {
@@ -139,11 +189,14 @@ const plugin: Plugin = async (_input, _options) => {
         }
       }
 
+      const starsCost = estimateStarsCost(tool)
+
       audit("tool.execute.before", {
         sessionID: input.sessionID,
         callID: input.callID,
         tool,
         args_summary: summariseArgs(tool, output.args),
+        stars_estimated: starsCost,
       })
     },
 
@@ -153,6 +206,7 @@ const plugin: Plugin = async (_input, _options) => {
         callID: input.callID,
         tool: input.tool,
         title: output.title,
+        stars_charged: estimateStarsCost(input.tool),
       })
     },
   }
@@ -164,5 +218,5 @@ const plugin: Plugin = async (_input, _options) => {
 export const server = plugin
 
 // Convenience re-exports for testing / programmatic use.
-export { buildSystemPrompt }
-export type { SystemPromptContext }
+export { buildSystemPrompt, loadCoursePack, buildOverlay, findMission }
+export type { SystemPromptContext, CoursePack }

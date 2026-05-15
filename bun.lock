@@ -13,6 +13,9 @@
     "packages/kids-plugin": {
       "name": "@kidsinai/kids-opencode-plugin",
       "version": "0.0.1",
+      "dependencies": {
+        "yaml": "^2.9.0",
+      },
       "devDependencies": {
         "@opencode-ai/plugin": "^1.14.51",
         "@opencode-ai/sdk": "^1.14.51",
