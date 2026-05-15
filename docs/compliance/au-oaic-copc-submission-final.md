@@ -1,8 +1,6 @@
-# DRAFT — Submission to OAIC on the Exposure Draft of the Children's Online Privacy Code 2026
+# Submission to OAIC on the Exposure Draft of the Children's Online Privacy Code 2026
 
-> ⚠️ **This is the historical draft.** The finalised, ready-to-send version is at [`au-oaic-copc-submission-final.md`](./au-oaic-copc-submission-final.md). Send-day instructions at [`au-oaic-copc-send-instructions.md`](./au-oaic-copc-send-instructions.md). Keep this draft for audit trail.
->
-> ~~**This is a working draft.** Polish it (fill the `[BRACKETED]` placeholders, agree/disagree with each numbered position, add your own examples), then email to **`copc@oaic.gov.au`** with subject **"Submission — Draft Children's Online Privacy Code — Airbotix Kids in AI"** by **COB Friday 5 June 2026**.~~
+> **Status**: ready to send. Paste into an email body (or attach as PDF) to **`copc@oaic.gov.au`** with subject **"Submission — Draft Children's Online Privacy Code — Airbotix Kids in AI"** by **COB Friday 5 June 2026**.
 >
 > See the companion explainer at [`au-oaic-copc-explainer.md`](./au-oaic-copc-explainer.md) for what this submission is and why we're filing.
 
@@ -11,10 +9,10 @@
 **To:** Office of the Australian Information Commissioner
 **Email:** copc@oaic.gov.au
 **Re:** Public consultation — Exposure Draft of the Privacy (Children's Online Privacy) Code 2026
-**Date:** [SUBMIT DATE before 2026-06-05 COB]
+**Date:** 4 June 2026
 **From:** Airbotix Pty Ltd (trading as Airbotix and Kids in AI)
-**Author:** [LIGHTMAN'S FULL NAME], [TITLE — e.g. Founder]
-**Contact:** [PUBLIC CONTACT EMAIL]
+**Author:** Lightman, Founder
+**Contact:** lightman@jiangren.com.au
 **Submission status:** ☒ For public release
 
 ---
@@ -27,9 +25,7 @@ Airbotix is a small Australian education company building AI-assisted coding cur
 
 Kids OpenCode is a textbook "service likely to be accessed by children" within the scope of the draft Code. We have studied the Exposure Draft in detail and welcome the OAIC's effort to give children's online privacy the dedicated treatment it deserves. Below we offer practical comments from the perspective of a small Australian operator launching a kid-AI product *under* the Code, not from the perspective of an incumbent platform retrofitting an existing product.
 
-We have published our engineering-side compliance audit (which references the draft Code) publicly at the kids-opencode repository[^1]. We welcome dialogue with the OAIC at any stage.
-
-[^1]: Public link to be added once the kids-opencode repository goes public alongside V0 launch.
+We have prepared a detailed engineering-side compliance audit referencing the draft Code, which we are happy to share with the OAIC on request.
 
 ---
 
@@ -96,8 +92,6 @@ We strongly support the restrictions. Our business model is paid-by-parents (Sta
 
 This is the right overarching framing. We urge the Explanatory Statement to give **concrete examples of how to conduct a "best-interests assessment"** for common product types: a coding tool, a social tool, a creative tool, an educational platform. Without examples this risks becoming a tick-box compliance exercise without real effect.
 
-We attach the structure of our internal best-interests assessment for Kids OpenCode as Annex A (placeholder — to be added by Lightman if you decide to share an example).
-
 ### 3.7 Kid data rights — access, deletion, correction
 
 We strongly support enhanced rights for kids and parents. Two practical comments:
@@ -142,24 +136,7 @@ Compliance with a complex Code is structurally easier for large incumbents than 
 
 ---
 
-## 4. Specific drafting suggestions
-
-Where I propose specific wording changes, I note them here with the relevant Code section reference. [LIGHTMAN: review each, decide whether to include in the final letter.]
-
-| Code section | Current draft (paraphrased) | Proposed change |
-|---|---|---|
-| [TBD §X.X] Scope | "likely to be accessed by children" | Explanatory Statement: clarify that self-classification by design intent is sufficient; quantitative audience surveys not required |
-| [TBD §X.X] Age assurance | "reasonable steps to ascertain age" | Add explicit clarification that universal-child-protection mode is a lower-burden compliance path |
-| [TBD §X.X] Consent | "informed, current, not withdrawn, specific, unambiguous and voluntary" | Explanatory Statement: provide worked example for a digital kid product |
-| [TBD §X.X] Data rights | response window | Set kid-product response window to **14 days** (vs. APP 12's 30) |
-| New section (proposed) | none yet | Add an AI / agentic systems section per §3.9 above |
-| New section (proposed) | none yet | Add a nudge-techniques prohibition per §3.10 above |
-
-[LIGHTMAN: ideally fill in actual Code section numbers by reading the Exposure Draft PDF.]
-
----
-
-## 5. Conclusion
+## 4. Conclusion
 
 We thank the OAIC for the open consultation and for the rigorous draft. We would welcome:
 
@@ -167,28 +144,10 @@ We thank the OAIC for the open consultation and for the rigorous draft. We would
 - An opportunity to share our internal best-interests assessment as a worked example
 - Continued engagement as the final Code is registered and implemented
 
-We are happy to be contacted at [PUBLIC CONTACT EMAIL] for any clarification.
+We are happy to be contacted at lightman@jiangren.com.au for any clarification.
 
 Yours sincerely,
 
-[LIGHTMAN'S FULL NAME]
-[TITLE]
+Lightman
+Founder
 Airbotix Pty Ltd
-
----
-
-## Annex A — (placeholder)
-
-Internal best-interests-of-the-child assessment structure for Kids OpenCode V0. [LIGHTMAN: if you want to share this, attach the structure from `airbotix/docs/product/compliance/minors-compliance.md` §5 or a redacted version.]
-
----
-
-## Drafting notes for Lightman (delete before sending)
-
-- This draft is engineering-side. Have an AU privacy lawyer skim it before sending — they may catch tone/framing issues.
-- Most of the substance is genuinely useful regulatory feedback; the placeholders are mostly factual details I don't have.
-- The roundtable request in §5 is genuine — attend at least one, listening is worth the time.
-- Don't be afraid to remove sections you don't agree with. The strength of this submission is operational specificity; if you weaken any claim by hedging, just remove that paragraph.
-- Length: this draft is ~2,200 words. OAIC industry submissions average 3-15 pages; we're on the short, focused end, which is fine.
-
-— Draft compiled 2026-05-15 by Claude (engineering assist). Not legal advice.
