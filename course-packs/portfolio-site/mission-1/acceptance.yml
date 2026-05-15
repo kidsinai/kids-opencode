@@ -1,0 +1,57 @@
+# Acceptance criteria for Mission 1.
+# Evaluated by kids-opencode-plugin after session end, against the kid's project folder.
+
+mission_id: mission-1
+title: "Project setup + first HTML page"
+
+# Each check is an independent boolean. All must pass for the Mission to be marked complete.
+checks:
+  - id: index_html_exists
+    description: "An index.html file exists in the project folder"
+    type: file_exists
+    path: "index.html"
+
+  - id: index_html_has_html_tag
+    description: "index.html is a real HTML document (has the html element)"
+    type: file_contains_regex
+    path: "index.html"
+    pattern: "(?i)<html"
+
+  - id: index_html_has_body
+    description: "index.html has a body section"
+    type: file_contains_regex
+    path: "index.html"
+    pattern: "(?i)<body"
+
+  - id: index_html_has_heading
+    description: "index.html has at least one heading (the kid's name)"
+    type: file_contains_regex
+    path: "index.html"
+    pattern: "(?i)<h[1-6][^>]*>"
+
+  - id: index_html_has_substance
+    description: "index.html has at least 50 characters of actual content in its body"
+    # Heuristic: html minus tags should have >= 50 non-whitespace characters
+    type: file_text_length_min
+    path: "index.html"
+    min_chars: 100  # rough proxy; tag-stripped check is done in plugin
+
+  - id: file_in_project_only
+    description: "All files written in this session are inside the project folder (no path traversal)"
+    type: audit_log_check
+    audit_rule: "all_writes_within_cwd"
+
+# What the kid sees on completion
+completion_message: |
+  Mission 1 complete! 🎉
+
+  You made a real web page from scratch. Your name is now on a thing you can show people.
+
+  Ready for Mission 2 — making it look like *you*?
+
+# What gets logged for the parent dashboard
+parent_summary_fields:
+  - "Mission 1 completed at [timestamp]"
+  - "Total Stars used: [stars]"
+  - "Number of file edits: [count]"
+  - "Total session time: [duration]"

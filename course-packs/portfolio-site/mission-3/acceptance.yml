@@ -1,0 +1,66 @@
+mission_id: mission-3
+title: "Add an interactive button"
+
+checks:
+  - id: script_js_exists
+    description: "A script.js file exists in the project folder"
+    type: file_exists
+    path: "script.js"
+
+  - id: index_links_to_script_js
+    description: "index.html includes a <script> tag referencing script.js"
+    type: file_contains_regex
+    path: "index.html"
+    pattern: '<script\s+[^>]*src=["'']script\.js["'']'
+
+  - id: index_has_a_button
+    description: "index.html has at least one <button> element"
+    type: file_contains_regex
+    path: "index.html"
+    pattern: '(?i)<button[^>]*>'
+
+  - id: script_has_event_listener
+    description: "script.js wires up an event listener (or onclick) so the button does something"
+    # Allow either modern (addEventListener) or simple (onclick) wiring; both are valid
+    type: file_contains_any_regex
+    path: "script.js"
+    patterns:
+      - 'addEventListener'
+      - 'onclick'
+      - 'onClick'
+
+  - id: portfolio_pages_intact
+    description: "Mission 1 + Mission 2 outputs still present"
+    type: all_must_exist
+    paths:
+      - "index.html"
+      - "style.css"
+      - "script.js"
+
+completion_message: |
+  Mission 3 complete! 🚀
+
+  You built a real interactive web page from scratch. Content, style, and behaviour.
+
+  Open `index.html` in your browser one more time. Click your button. That's something you made.
+
+  📁 Your project lives in this folder. You can keep editing it any time.
+  🎓 You finished the Personal Portfolio Course Pack.
+
+  Want to keep going? Ask the AI: "What should I learn next?"
+
+parent_summary_fields:
+  - "Mission 3 completed at [timestamp]"
+  - "Course Pack 'portfolio-site' completed"
+  - "Total Stars used across pack: [stars_total]"
+  - "Final file count: [count]"
+  - "Total time across pack: [duration_total]"
+
+# Pack-level summary (emitted on Mission 3 completion)
+pack_completion_message: |
+  🎉 You finished the whole Course Pack.
+
+  What you built: a personal portfolio website with HTML, CSS, and JavaScript.
+  What you learned: how a web page works, how to design, how to debug.
+
+  Show your family. Then come back when you're ready for the next pack.

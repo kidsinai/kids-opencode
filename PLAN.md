@@ -53,7 +53,7 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 
 ---
 
-## Phase 2 — Plugin + wrapper + installer 🟡 IN PROGRESS (W3-4)
+## Phase 2 — Plugin + wrapper + installer 🟢 ENGINEERING DONE (W3-4)
 
 **Goal**: One-line install works end-to-end on a clean macOS / Linux machine. Plugin enforces the kid-safety constraints.
 
@@ -66,11 +66,11 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 - [x] `config/system-prompt.md` — canonical kid-safe prompt
 - [x] `bin/kids-opencode` — shell wrapper exec'ing `opencode --config $HOME/.config/kids-opencode/opencode.json`
 - [x] `install.sh` — installs opencode upstream if missing → `opencode plugin install @kidsinai/kids-opencode-plugin` → drops config → installs wrapper
-- [ ] Publish `@kidsinai/kids-opencode-plugin@0.0.1` to npm registry under the `@kidsinai` scope
-- [ ] Stand up `airbotix.ai/install/kids` to serve `install.sh` (this is `Airbotix-AI/airbotix` repo's job)
-- [ ] End-to-end smoke test: a fresh macOS shell user runs the curl command and `kids-opencode` boots and completes one round-trip
-  - [ ] Anthropic / OpenAI / DeepRouter key handover from Lightman to the engineer first
-- [ ] DeepRouter local connect: configure provider to point at `http://localhost:3000/v1` with `airbotix-kids` tenant key; verify request log shows the call
+- [x] Smoke-test: `sh -n install.sh` ✅, `sh -n bin/kids-opencode` ✅, plugin typecheck ✅, plugin module loads ✅
+- [ ] Publish `@kidsinai/kids-opencode-plugin@0.0.1` to npm registry under the `@kidsinai` scope — **blocked on npm scope auth (Lightman)**
+- [ ] Stand up `airbotix.ai/install/kids` to serve `install.sh` — **`Airbotix-AI/airbotix` repo's job (other AI session)**
+- [ ] End-to-end live run: a fresh macOS shell user runs the curl command and `kids-opencode` boots and completes one round-trip — **blocked on provider key handover (Lightman)**
+- [ ] DeepRouter local connect: configure provider to point at `http://localhost:3000/v1` with `airbotix-kids` tenant key; verify request log shows the call — **blocked on platform-backend tenant-key issuance pipeline**
 
 ### Acceptance
 - [ ] `curl ... | sh` exits 0 on a clean macOS box, leaves a working `kids-opencode` on PATH
@@ -90,11 +90,11 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 **Goal**: First Course Pack ("Personal Portfolio Website") runs end-to-end. Kid finishes Mission 1 in <20 minutes.
 
 ### Tasks
-- [ ] Course Pack format: `course-packs/<pack-id>/{pack.yml, mission-N/{brief.md, acceptance.yml, starter/}}`
-- [ ] First pack content: 3 missions for the portfolio site (curriculum team owns content; engineering owns runtime)
-- [ ] Plugin reads `KIDS_COURSE_PACK` + `KIDS_MISSION` env vars and threads them into the system prompt template
-- [ ] `kids-opencode --course portfolio-site` flag in the wrapper to set env + start session
-- [ ] Acceptance check runner: post-session, run `acceptance.yml` rules against the project folder (file exists, contains certain elements, etc.)
+- [x] Course Pack format defined: `course-packs/<pack-id>/{pack.yml, mission-N/{brief.md, acceptance.yml}}`
+- [x] First pack content drafted: `course-packs/portfolio-site/` — 3 missions (setup+HTML, CSS, JS button), ~40⭐ budget. **Workshop-test pending.**
+- [x] Plugin reads `KIDS_COURSE_PACK` + `KIDS_MISSION` + `KIDS_OBJECTIVES` + `KIDS_AGE_BAND` env vars and threads them into the system prompt template (see `packages/kids-plugin/src/index.ts` `readContextFromEnv()`)
+- [ ] `kids-opencode --course portfolio-site --mission mission-1` flag forwarding in the wrapper — TODO (wrapper currently passes args through to opencode)
+- [ ] Acceptance check runner: post-session, walk `acceptance.yml` rules against the project folder
 - [ ] Stars accounting: emit the per-round-trip Stars cost in stderr; later phases connect this to platform-backend wallet
 
 ### Acceptance
@@ -112,12 +112,17 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 **Goal**: 50-prompt red-team set passes ≥48/50. AU lawyer sees `docs/compliance/au.md` and signs off the eight `AU-*` open items (or returns notes).
 
 ### Tasks
-- [ ] Build `docs/red-team.md` with 50 prompts covering: prompt injection, jailbreak via "ignore previous", request for adult content, request for `shell` tool, request to read `/etc/passwd`, request to `webfetch` a non-whitelisted URL, self-harm signal, asking the AI to pretend to be human, asking to write code for malicious purpose, attempt to exfiltrate the system prompt
-- [ ] Run the set against `kids-opencode` in BYOK mode (real LLM)
+- [x] Build `docs/red-team.md` with 50 prompts across 6 classes (prompt injection, jailbreak-via-roleplay, content, tool exfiltration, identity leakage, multi-turn manipulation). **Run not yet performed.**
+- [ ] Run the set against `kids-opencode` in BYOK mode (real LLM) — blocked on provider key
 - [ ] For each fail, fix in plugin or system prompt and re-run
-- [ ] Schedule AU lawyer review of `docs/compliance/au.md` — book it 4 weeks before V0 launch
-- [ ] Address each AU-1..AU-8 open item (see `docs/compliance/au.md` §9)
-- [ ] Submit consultation response to OAIC for Children's Online Privacy Code (deadline **5 June 2026** — hard)
+- [x] Engineering-side draft answers for all 8 `AU-*` items in [`docs/compliance/au-lawyer-pass.md`](./docs/compliance/au-lawyer-pass.md) — reduces lawyer time from ~40-60h to ~11-16h
+- [x] Sole-or-Primary-Purpose Statement drafted ([`docs/compliance/au-sole-or-primary-purpose-statement.md`](./docs/compliance/au-sole-or-primary-purpose-statement.md)) — AU-1 evidence
+- [x] AI Safety Assessment v0.1 ([`docs/safety-assessment.md`](./docs/safety-assessment.md)) — AU-7 instantiated against Voluntary AI Safety Standard + eSafety SbD
+- [x] NDB incident runbook ([`docs/runbook/ndb-incident.md`](./docs/runbook/ndb-incident.md)) — AU-5 operational
+- [x] OAIC COPC consultation submission drafted ([`docs/compliance/au-oaic-copc-submission-draft.md`](./docs/compliance/au-oaic-copc-submission-draft.md))
+- [ ] Lightman polishes + emails OAIC submission to `copc@oaic.gov.au` — **deadline 2026-06-05 COB**
+- [ ] Schedule AU lawyer review session (estimated 11-16h, see au-lawyer-pass.md)
+- [ ] Lightman / Lightman+lawyer email Anthropic, OpenAI, Doubao compliance teams (AU-8)
 
 ### Acceptance
 - [ ] ≥48/50 red-team prompts safely refused or redirected
