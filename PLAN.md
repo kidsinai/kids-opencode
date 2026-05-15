@@ -1,6 +1,6 @@
 # Kids OpenCode — Development Plan (V0 → Workshop dogfood)
 
-> **Status**: v0.2 living plan · CLI-first pivot · Updated 2026-05-15
+> **Status**: v0.3 living plan · CLI-first pivot · Updated 2026-05-15 (post G1-G12 engineering closeout)
 > **Owner**: Joe (CTO) + 1 TS engineer (TBH)
 > **Goal**: A kid-safe `kids-opencode` CLI installable via `curl ... | sh`, that lets a kid 12+ build a real HTML/CSS/JS project in a guided way, with all LLM traffic routed through DeepRouter and all tool use audited.
 > **Cross-doc links**:
@@ -85,17 +85,18 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 
 ---
 
-## Phase 3 — Course Pack runner (W5-6)
+## Phase 3 — Course Pack runner (W5-6) 🟢 ENGINEERING DONE
 
 **Goal**: First Course Pack ("Personal Portfolio Website") runs end-to-end. Kid finishes Mission 1 in <20 minutes.
 
 ### Tasks
 - [x] Course Pack format defined: `course-packs/<pack-id>/{pack.yml, mission-N/{brief.md, acceptance.yml}}`
-- [x] First pack content drafted: `course-packs/portfolio-site/` — 3 missions (setup+HTML, CSS, JS button), ~40⭐ budget. **Workshop-test pending.**
-- [x] Plugin reads `KIDS_COURSE_PACK` + `KIDS_MISSION` + `KIDS_OBJECTIVES` + `KIDS_AGE_BAND` env vars and threads them into the system prompt template (see `packages/kids-plugin/src/index.ts` `readContextFromEnv()`)
-- [ ] `kids-opencode --course portfolio-site --mission mission-1` flag forwarding in the wrapper — TODO (wrapper currently passes args through to opencode)
-- [ ] Acceptance check runner: post-session, walk `acceptance.yml` rules against the project folder
-- [ ] Stars accounting: emit the per-round-trip Stars cost in stderr; later phases connect this to platform-backend wallet
+- [x] First pack content drafted: `packages/kids-plugin/course-packs/portfolio-site/` — 3 missions (setup+HTML, CSS, JS button), ~40⭐ budget. **Workshop-test pending.**
+- [x] Plugin reads `KIDS_COURSE_PACK` + `KIDS_MISSION` + `KIDS_OBJECTIVES` + `KIDS_AGE_BAND` env vars and threads them into the system prompt template
+- [x] Plugin loads bundled `course-packs/<pack-id>/pack.yml` and prepends `system_prompt_overlay` to the kid-safe prompt (commit `67f29ca`, G3)
+- [x] `kids-opencode --course portfolio-site --mission mission-1` flag handling in wrapper translates to env vars before exec'ing opencode (G4)
+- [x] Acceptance check runner: `kids-opencode check <mission>` walks `acceptance.yml` against the kid's project folder, exits 0/1/2 with friendly report (G6)
+- [x] Stars accounting: per-tool cost emitted as `stars_estimated` on every `tool.execute.before` audit line; `estimateStarsCost()` exported (G12). Platform-backend wallet integration is Phase 5.
 
 ### Acceptance
 - [ ] Lightman (or a willing test kid) completes the first mission with no engineer intervention
@@ -180,22 +181,30 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 ## Critical-path dependency
 
 ```
-DeepRouter PLAN P2 (W5-6 endpoint) ─┐
-   (actually shipped early on 2026-05-14)
-                                     ▼
-            Phase 2 (W3-4, in progress)
-                            │
-                            ▼
-                Phase 3 (W5-6 course pack)
-                            │
-                            ▼
-                Phase 4 (W7-8 red team + lawyer)
-                            │
-                            ▼
-       Phase 5 (W9-10 workshop mode) ── parallel: airbotix-app cloud side
-                            │
-                            ▼
-                Phase 6 (W11-12 dogfood)
+DeepRouter P2 endpoint ✅ shipped 2026-05-14
+        │
+        ▼
+Phase 1  ✅ archaeology done
+        │
+        ▼
+Phase 2  ✅ engineering done (G1-G12 fixes in commit 67f29ca, 2026-05-15)
+            blocked on: npm scope auth, airbotix.ai install endpoint, provider key
+        │
+        ▼
+Phase 3  ✅ engineering done (Course Pack runner + acceptance + Stars)
+            blocked on: curriculum content review, workshop dogfood
+        │
+        ▼
+Phase 4  🟡 engineering done; needs lawyer + red-team run
+        │
+        ▼
+Phase 5  🔴 workshop mode — blocked on Airbotix-AI/platform-backend Phase 5 work
+                                                │
+                                                ▼
+                                     parallel: Airbotix-AI/airbotix-app cloud side
+        │
+        ▼
+Phase 6  🔴 workshop dogfood — needs Phase 5 + a real workshop cohort
 ```
 
 ---
@@ -235,18 +244,21 @@ DeepRouter PLAN P2 (W5-6 endpoint) ─┐
 
 ## Definition of "Kids OpenCode V0 Done"
 
-All true at the same time:
-1. ✅ `curl -fsSL https://airbotix.ai/install/kids | sh` works on a clean macOS + Linux machine
-2. ✅ `@kidsinai/kids-opencode-plugin` published to npm
-3. ✅ One real Airbotix workshop dogfooded with ≥18/20 kids completing the portfolio Course Pack
-4. ✅ `docs/compliance/au.md` lawyer-reviewed; all 8 AU-* open items closed
-5. ✅ OAIC Children's Online Privacy Code consultation submission filed (deadline 2026-06-05)
-6. ✅ Zero safety incidents in dogfood
-7. ✅ Public privacy policy + ToS + parental consent forms live on airbotix.ai
-8. ✅ Red-team test set ≥48/50 pass rate
-9. ✅ Plugin emits audit lines that platform-backend can ingest (Phase 5 integration)
+Status as of 2026-05-15 (post G1-G12). 🟢 engineering-complete · 🟡 engineering-complete but external dep · 🔴 not yet.
 
-When all 9 are green: V0 done.
+| # | Item | Status | Blocked on |
+|---|---|---|---|
+| 1 | `curl -fsSL https://airbotix.ai/install/kids \| sh` works on clean macOS + Linux | 🟡 installer SHA-verified, syntax-checked, smoke-tested locally; pinned to provider config | airbotix.ai endpoint deployment (Airbotix-AI/airbotix repo); npm publish |
+| 2 | `@kidsinai/kids-opencode-plugin` published to npm | 🔴 | npm `@kidsinai` scope auth (Lightman) |
+| 3 | One real Airbotix workshop dogfooded with ≥18/20 kids completing the portfolio Course Pack | 🔴 | running a real workshop |
+| 4 | `docs/compliance/au.md` lawyer-reviewed; all 8 AU-* open items closed | 🟡 substantive draft answers ready (`au-lawyer-pass.md`); 11-16h lawyer time | retainer signed |
+| 5 | OAIC Children's Online Privacy Code consultation submission filed | 🟡 draft complete (`au-oaic-copc-submission-draft.md`) | Lightman polish + email by 2026-06-05 COB |
+| 6 | Zero safety incidents in dogfood | 🔴 | dogfood happens first |
+| 7 | Public privacy policy + ToS + parental consent forms live on airbotix.ai | 🟡 4 docs drafted in `Airbotix-AI/airbotix/docs/legal/` | marketing-site rendering + lawyer review |
+| 8 | Red-team test set ≥48/50 pass rate | 🟡 50 prompts written (`docs/red-team.md`); not yet executed | provider key |
+| 9 | Plugin emits audit lines that platform-backend can ingest | 🟡 plugin emits structured JSON to stderr; persistence pipeline pending | platform-backend Phase 5 work |
+
+**Engineering net**: this side of the wall is done. Items 2-3, 5-9 all depend on actions outside this repo's scope.
 
 ---
 
@@ -254,5 +266,6 @@ When all 9 are green: V0 done.
 
 | Version | Date | Note |
 |---|---|---|
+| 0.3 | 2026-05-15 | **G1-G12 closeout.** Phase 2 + Phase 3 marked engineering-done; Phase 4 mostly engineering-done. CI workflow, 36 plugin tests, acceptance runner, Stars cost estimation, install.sh SHA verification, AI-disclosure banner, --course/--mission flag translation, CHANGELOG/SECURITY/CONTRIBUTING/PR template all landed. Definition-of-V0-Done section rewritten as a 9-row status table. |
 | 0.2 | 2026-05-15 | **CLI-first pivot.** Dropped Phase 3 (Kid Web UI), Phase 4 sandbox-hardening reframed for CLI (no virtual FS / iframe), workshop mode moved to airbotix-app integration. Plugin + wrapper + installer are the deliverable. |
 | 0.1 | 2026-05-12 | Initial plan. Hosted-web V0 with three-column React UI + server virtual FS. |
