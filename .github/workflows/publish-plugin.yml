@@ -1,0 +1,116 @@
+name: Publish plugin to npm
+
+# Publishes @kidsinai/kids-opencode-plugin on every tagged release.
+#
+# Prerequisites (one-time setup by Lightman):
+#  1. npm @kidsinai scope created and 2FA enabled on the publishing account
+#  2. NPM_TOKEN added to the repo's Actions secrets as "Automation" token
+#     (publish-grant; does not bypass 2FA on the account itself)
+#  3. The plugin's package.json `version` field bumped to match the tag
+#
+# Trigger: any `v*` tag pushed to main.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.0.1). Required for manual dispatch."
+        required: true
+        type: string
+
+concurrency:
+  group: publish-plugin-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to npm
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write   # OIDC for npm provenance
+      packages: write   # in case we ever mirror to GHCR
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.1.x
+
+      - name: Setup Node (for npm publish + provenance)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@kidsinai"
+          always-auth: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Sanity — package version matches tag
+        working-directory: packages/kids-plugin
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          # Strip leading 'v' if present.
+          tag_version="${tag#v}"
+          pkg_version=$(jq -r '.version' package.json)
+          echo "tag version: $tag_version"
+          echo "package.json version: $pkg_version"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::package.json version ($pkg_version) does not match release tag ($tag_version). Bump package.json before tagging."
+            exit 1
+          fi
+
+      - name: Typecheck
+        working-directory: packages/kids-plugin
+        run: bun run typecheck
+
+      - name: Run tests
+        working-directory: packages/kids-plugin
+        run: bun test
+
+      - name: Verify required files ship
+        working-directory: packages/kids-plugin
+        run: |
+          # Whatever ends up in `files:` is what npm publishes. Sanity-check.
+          test -d src
+          test -d course-packs
+          test -f course-packs/portfolio-site/pack.yml
+          test -f course-packs/portfolio-site/mission-1/acceptance.yml
+          test -f course-packs/portfolio-site/mission-1/brief.md
+          test -f src/index.ts
+          test -f src/system-prompt.ts
+          test -f src/course-pack.ts
+          test -f src/acceptance.ts
+          test -f src/check-runner.ts
+
+      - name: Publish to npm with provenance
+        working-directory: packages/kids-plugin
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          npm publish --provenance --access public
+
+      - name: Comment on release with install instructions
+        if: github.event_name == 'release'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const release = context.payload.release
+            const version = release.tag_name
+            const body = `\n\n---\n\n📦 \`@kidsinai/kids-opencode-plugin@${version}\` published to npm.\n\nInstall via opencode:\n\n\`\`\`\nopencode plugin install @kidsinai/kids-opencode-plugin@${version}\n\`\`\`\n`
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              body: (release.body || '') + body,
+            })

@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.1.x
+
+      - name: Cache Bun store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Shell-script lint (shellcheck)
+        run: |
+          sudo apt-get install -y shellcheck
+          # Wrapper + installer must lint clean. We don't gate on every warning
+          # but errors fail the run.
+          shellcheck -S error bin/kids-opencode install.sh
+
+      - name: Shell-script syntax check
+        run: |
+          sh -n install.sh
+          sh -n bin/kids-opencode
+
+      - name: TypeScript typecheck (all workspaces)
+        run: bun --filter '*' typecheck
+
+      - name: Plugin tests
+        working-directory: packages/kids-plugin
+        run: bun test
+
+      - name: Smoke — plugin loads
+        run: |
+          bun --print "(await import('./packages/kids-plugin/src/index.ts')).server.constructor.name" \
+            | tee /tmp/load-result.txt
+          grep -q 'AsyncFunction' /tmp/load-result.txt
+
+      - name: Smoke — Course Pack parses
+        run: |
+          KIDS_COURSE_PACK=portfolio-site \
+            bun --print "JSON.stringify((await import('./packages/kids-plugin/src/course-pack.ts')).loadCoursePack('portfolio-site')).length > 100"
+
+      - name: Smoke — acceptance runner end-to-end
+        run: |
+          TMP=$(mktemp -d)
+          cat > "$TMP/index.html" <<'HTML'
+          <!DOCTYPE html>
+          <html><head><title>T</title></head>
+          <body>
+            <h1>Hi I am Sample</h1>
+            <p>I am building my first website. This is what I want it to be about: animals, space, and chess. I really love chess.</p>
+          </body>
+          </html>
+          HTML
+          cd "$TMP"
+          bun "$GITHUB_WORKSPACE/packages/kids-plugin/src/check-runner.ts" \
+            mission-1 --course portfolio-site
+
+  notify-stale-upstream:
+    name: Notify on stale upstream opencode
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    steps:
+      - name: Check latest @opencode-ai/sdk
+        run: |
+          latest=$(npm view @opencode-ai/sdk version)
+          ours=$(jq -r '.dependencies."@opencode-ai/sdk" // .devDependencies."@opencode-ai/sdk"' \
+            packages/kids-plugin/package.json | sed 's/[^0-9.]//g')
+          echo "Latest: $latest"
+          echo "Ours:   $ours"
+          if [ "$latest" != "$ours" ]; then
+            echo "::warning::A newer @opencode-ai/sdk is available ($latest). Consider bumping."
+          fi

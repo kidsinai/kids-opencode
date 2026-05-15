@@ -1,0 +1,209 @@
+name: Publish installer to airbotix.ai/install/kids
+
+# Uploads install.sh + bin/kids-opencode + config template to the S3 bucket
+# that backs https://airbotix.ai/install/kids on every tagged release.
+#
+# Embeds the SHA-256 of bin/kids-opencode into install.sh at upload time
+# (replaces the EXPECTED_WRAPPER_SHA placeholder) so end-user installs can
+# verify integrity.
+#
+# Prerequisites (one-time setup):
+#  1. S3 bucket `airbotix-installers-public` in ap-southeast-2 with public-read
+#     and CloudFront-only origin access (no direct s3 public reads)
+#  2. CloudFront distribution mapping airbotix.ai/install/kids/* → S3 origin
+#  3. GitHub OIDC IAM role `kids-opencode-installer-publisher` trusted to
+#     this repo + branch; permissions: s3:PutObject on bucket prefix,
+#     cloudfront:CreateInvalidation on distribution
+#  4. Two repository variables set:
+#       AWS_INSTALLER_BUCKET    = airbotix-installers-public
+#       AWS_INSTALLER_ROLE_ARN  = arn:aws:iam::<acct>:role/kids-opencode-installer-publisher
+#       AWS_INSTALLER_DIST_ID   = E1234ABCD...
+#
+# Design doc: ~/Documents/sites/airbotix/docs/ai/install-kids-hosting.md
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.0.1)"
+        required: true
+        type: string
+
+concurrency:
+  group: publish-installer-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build + upload installer artefacts
+    runs-on: ubuntu-latest
+
+    permissions:
+      id-token: write    # OIDC for AWS
+      contents: read
+
+    env:
+      AWS_REGION: ap-southeast-2
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Resolve version from tag
+        id: ver
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          version="${tag#v}"
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "version=$version" >> $GITHUB_OUTPUT
+
+      - name: Shell sanity
+        run: |
+          sh -n install.sh
+          sh -n bin/kids-opencode
+
+      - name: Compute SHA-256 of wrapper + install.sh
+        id: sha
+        run: |
+          wrapper_sha=$(sha256sum bin/kids-opencode | awk '{print $1}')
+          echo "wrapper_sha=$wrapper_sha" >> $GITHUB_OUTPUT
+          echo "Wrapper SHA-256: $wrapper_sha"
+
+      - name: Bake wrapper SHA + version into install.sh
+        run: |
+          # Replace the placeholders. Both keys are deliberately distinctive
+          # so a careless edit elsewhere won't collide.
+          sed -i \
+            -e "s/EXPECTED_WRAPPER_SHA=\"REPLACED_AT_RELEASE_TAG\"/EXPECTED_WRAPPER_SHA=\"${{ steps.sha.outputs.wrapper_sha }}\"/" \
+            -e "s/KIDS_VERSION=\"0.0.1\"/KIDS_VERSION=\"${{ steps.ver.outputs.version }}\"/" \
+            install.sh
+          # Recompute install.sh SHA after the edit.
+          install_sha=$(sha256sum install.sh | awk '{print $1}')
+          echo "install_sha=$install_sha"
+          echo "$install_sha  install.sh" > install.sh.sha256
+          echo "${{ steps.sha.outputs.wrapper_sha }}  kids-opencode" > kids-opencode.sha256
+
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_INSTALLER_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Upload current-stable artefacts (5-minute CloudFront TTL)
+        env:
+          BUCKET: ${{ vars.AWS_INSTALLER_BUCKET }}
+        run: |
+          aws s3 cp install.sh "s3://$BUCKET/kids/install.sh" \
+            --cache-control "public, max-age=300" \
+            --content-type "text/x-shellscript"
+          aws s3 cp install.sh.sha256 "s3://$BUCKET/kids/install.sh.sha256" \
+            --cache-control "public, max-age=300"
+          aws s3 cp bin/kids-opencode "s3://$BUCKET/kids/bin/kids-opencode" \
+            --cache-control "public, max-age=300" \
+            --content-type "text/x-shellscript"
+          aws s3 cp kids-opencode.sha256 "s3://$BUCKET/kids/bin/kids-opencode.sha256" \
+            --cache-control "public, max-age=300"
+          aws s3 cp config/opencode.json.template "s3://$BUCKET/kids/config/opencode.json.template" \
+            --cache-control "public, max-age=300" \
+            --content-type "application/json"
+
+      - name: Upload immutable pinned-version artefacts (1-year cache)
+        env:
+          BUCKET: ${{ vars.AWS_INSTALLER_BUCKET }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          aws s3 cp install.sh "s3://$BUCKET/kids/$TAG/install.sh" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "text/x-shellscript"
+          aws s3 cp install.sh.sha256 "s3://$BUCKET/kids/$TAG/install.sh.sha256" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp bin/kids-opencode "s3://$BUCKET/kids/$TAG/bin/kids-opencode" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "text/x-shellscript"
+          aws s3 cp kids-opencode.sha256 "s3://$BUCKET/kids/$TAG/bin/kids-opencode.sha256" \
+            --cache-control "public, max-age=31536000, immutable"
+          aws s3 cp config/opencode.json.template "s3://$BUCKET/kids/$TAG/config/opencode.json.template" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "application/json"
+
+      - name: Generate + upload SBOM (CycloneDX)
+        env:
+          BUCKET: ${{ vars.AWS_INSTALLER_BUCKET }}
+          TAG: ${{ steps.ver.outputs.tag }}
+        run: |
+          cat > sbom.json <<EOF
+          {
+            "bomFormat": "CycloneDX",
+            "specVersion": "1.5",
+            "version": 1,
+            "metadata": {
+              "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+              "tools": [{"vendor": "Airbotix", "name": "kids-opencode-publish-installer"}],
+              "component": {
+                "type": "application",
+                "name": "kids-opencode",
+                "version": "${{ steps.ver.outputs.version }}"
+              }
+            },
+            "components": [
+              {
+                "type": "application",
+                "name": "opencode",
+                "supplier": {"name": "anomalyco"},
+                "purl": "pkg:github/anomalyco/opencode",
+                "licenses": [{"license": {"id": "MIT"}}]
+              },
+              {
+                "type": "library",
+                "name": "@opencode-ai/sdk",
+                "supplier": {"name": "anomalyco"},
+                "purl": "pkg:npm/%40opencode-ai/sdk",
+                "licenses": [{"license": {"id": "MIT"}}]
+              },
+              {
+                "type": "library",
+                "name": "@opencode-ai/plugin",
+                "supplier": {"name": "anomalyco"},
+                "purl": "pkg:npm/%40opencode-ai/plugin",
+                "licenses": [{"license": {"id": "MIT"}}]
+              },
+              {
+                "type": "library",
+                "name": "@kidsinai/kids-opencode-plugin",
+                "supplier": {"name": "Airbotix"},
+                "purl": "pkg:npm/%40kidsinai/kids-opencode-plugin@${{ steps.ver.outputs.version }}",
+                "licenses": [{"license": {"id": "MIT"}}]
+              }
+            ]
+          }
+          EOF
+          aws s3 cp sbom.json "s3://$BUCKET/kids/sbom.json" \
+            --cache-control "public, max-age=300" \
+            --content-type "application/json"
+          aws s3 cp sbom.json "s3://$BUCKET/kids/$TAG/sbom.json" \
+            --cache-control "public, max-age=31536000, immutable" \
+            --content-type "application/json"
+
+      - name: Invalidate CloudFront cache for current-stable paths
+        env:
+          DIST_ID: ${{ vars.AWS_INSTALLER_DIST_ID }}
+        run: |
+          aws cloudfront create-invalidation \
+            --distribution-id "$DIST_ID" \
+            --paths "/install/kids" "/install/kids/*"
+
+      - name: Summary
+        run: |
+          {
+            echo "## Installer published"
+            echo ""
+            echo "- Version: \`${{ steps.ver.outputs.tag }}\`"
+            echo "- Wrapper SHA-256: \`${{ steps.sha.outputs.wrapper_sha }}\`"
+            echo "- Current-stable: https://airbotix.ai/install/kids"
+            echo "- Pinned: https://airbotix.ai/install/kids/${{ steps.ver.outputs.tag }}/install.sh"
+            echo "- SBOM: https://airbotix.ai/install/kids/sbom.json"
+          } >> $GITHUB_STEP_SUMMARY
