@@ -2,50 +2,61 @@
 #
 # kids-opencode — kid-safe wrapper that launches the own-client TUI.
 #
-# Phase 2.5 architecture (per docs/v2-api-verification.md Q3, resolved 2026-05-16):
-# the `kids-client` binary owns the `opencode serve` subprocess and tails its
-# stderr for plugin audit events. This wrapper's job shrinks to:
-#   1. Print an AI-disclosure banner once per session.
-#   2. Translate Kids-OpenCode-specific flags (--course, --mission) into env
-#      vars consumed by both the plugin AND kids-client.
-#   3. Dispatch `kids-opencode check <mission>` to the acceptance runner.
-#   4. Dispatch `kids-opencode --shutdown` to kill any leftover serve.
+# Phase 2.5 architecture (per docs/v2-api-verification.md Q3, 2026-05-16):
+# the `kids-client` binary owns the `opencode serve` subprocess and tails
+# its stderr for plugin audit events. This wrapper's job:
+#   1. Bootstrap PATH so freshly-installed binaries are findable in the
+#      same shell the user ran the installer in. No `exec zsh` needed.
+#   2. Print an AI-disclosure banner once per session (compliance).
+#   3. Translate Kids-OpenCode flags (--course, --mission) into env vars.
+#   4. Dispatch subcommands (check / register / --update / --shutdown).
 #   5. Load OPENCODE_SERVER_PASSWORD from disk.
-#   6. exec kids-client; client spawns + supervises `opencode serve`.
+#   6. exec kids-client; the client spawns + supervises the AI engine.
 #
 # All kid-safety enforcement (system prompt, tool whitelist, webfetch
 # allowlist, audit emit) lives in:
-#   - @kidsinai/kids-opencode-plugin (npm, loaded by opencode serve)
-#   - @kidsinai/kids-client (npm, renders the kid-warm TUI)
+#   - @kidsinai/kids-opencode-plugin (loaded by the AI engine)
+#   - @kidsinai/kids-client (renders the kid-warm TUI)
 #   - $KIDS_OPENCODE_CONFIG (default: ~/.config/kids-opencode/opencode.json)
-#
-# Override the config location:
-#   KIDS_OPENCODE_CONFIG=/path/to/your/config.json kids-opencode
 set -e
 
 KIDS_OPENCODE_VERSION="0.0.1"
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
 
 # ────────────────────────────────────────────────────────────────────────────
-# Subcommand dispatch (before flag parsing)
+# 1. PATH bootstrap (idempotent)
+# ────────────────────────────────────────────────────────────────────────────
+# The installer drops dependencies into ~/.bun/bin (kids-client + JS runtime)
+# and ~/.opencode/bin (AI engine). Upstream installers modify the user's
+# shell rc, but a brand-new shell session is the only one that picks that
+# up. We mirror those PATH entries here so the user can run kids-opencode
+# in the SAME shell that ran the installer — no source / exec / restart.
+for d in "$HOME/.bun/bin" "$HOME/.opencode/bin" "$HOME/.local/bin"; do
+  case ":$PATH:" in
+    *":$d:"*) : ;;
+    *) [ -d "$d" ] && PATH="$d:$PATH" ;;
+  esac
+done
+export PATH
+
+# ────────────────────────────────────────────────────────────────────────────
+# 2. Subcommand dispatch (before flag parsing)
 # ────────────────────────────────────────────────────────────────────────────
 
 case "${1:-}" in
   check)
     shift
-    # Hand off to the acceptance runner. Bundled with the plugin install.
     if ! command -v bun >/dev/null 2>&1; then
-      echo "kids-opencode: 'bun' is required for the check subcommand." >&2
-      echo "Install bun: https://bun.sh" >&2
+      echo "Kids OpenCode: required runtime missing." >&2
+      echo "Reinstall: curl -fsSL https://airbotix.ai/install/kids | sh" >&2
       exit 1
     fi
     PLUGIN_DIR="$(opencode plugin path @kidsinai/kids-opencode-plugin 2>/dev/null || true)"
     if [ -z "$PLUGIN_DIR" ] || [ ! -d "$PLUGIN_DIR" ]; then
-      # Fallback: try the package node_modules location
       PLUGIN_DIR="$HOME/.config/opencode/plugins/node_modules/@kidsinai/kids-opencode-plugin"
     fi
     if [ ! -f "$PLUGIN_DIR/src/check-runner.ts" ]; then
-      echo "kids-opencode: acceptance runner not found at $PLUGIN_DIR/src/check-runner.ts" >&2
+      echo "Kids OpenCode: mission validator not found." >&2
       echo "Reinstall: curl -fsSL https://airbotix.ai/install/kids | sh" >&2
       exit 1
     fi
@@ -53,10 +64,8 @@ case "${1:-}" in
     ;;
   register)
     # Per PRD §7.3, identity + payment + tenant-key issuance happens here.
-    # The full flow needs an OAuth-style browser callback to
-    # app.airbotix.ai/portal/signup, which depends on airbotix-app shipping
-    # a callback handler (PRD §10 Q6). Until that lands, register prints
-    # the device-code fallback flow + helpful URLs.
+    # Until app.airbotix.ai/portal/signup callback ships (PRD §10 Q6), this
+    # is a device-code fallback.
     shift
     CONFIG_DIR_REG="$(dirname "${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}")"
     mkdir -p "$CONFIG_DIR_REG"
@@ -66,7 +75,6 @@ case "${1:-}" in
       if command -v uuidgen >/dev/null 2>&1; then
         uuidgen | tr 'A-Z' 'a-z' > "$DEVICE_ID_FILE"
       else
-        # POSIX-portable random 16-byte hex (works on macOS + Linux).
         od -An -N16 -tx1 /dev/urandom | tr -d ' \n' > "$DEVICE_ID_FILE"
       fi
       chmod 600 "$DEVICE_ID_FILE"
@@ -74,8 +82,8 @@ case "${1:-}" in
     DEVICE_ID="$(cat "$DEVICE_ID_FILE")"
     cat <<REGEOF
 
-kids-opencode register
-──────────────────────
+Kids OpenCode — register your family
+─────────────────────────────────────
 
 Step 1: open the parent portal in any browser:
   https://app.airbotix.ai/portal/signup?device=$DEVICE_ID
@@ -88,90 +96,71 @@ REGEOF
     printf "  code: "
     read -r CODE
     if [ -z "$CODE" ]; then
-      echo "kids-opencode: no code entered; nothing saved." >&2
+      echo "Kids OpenCode: no code entered; nothing saved." >&2
       exit 1
     fi
-    # Until the portal callback is live, we accept the code shape but
-    # cannot exchange it for a tenant key yet. We persist what we got so
-    # a future kids-opencode update can finish the round-trip.
     echo "$CODE" > "$CONFIG_DIR_REG/register-code"
     chmod 600 "$CONFIG_DIR_REG/register-code"
-    echo "kids-opencode: code saved to $CONFIG_DIR_REG/register-code." >&2
+    echo "Kids OpenCode: code saved." >&2
     echo "" >&2
-    echo "⚠️  Tenant-key exchange not yet live (airbotix-app portal callback in progress)." >&2
-    echo "    Until then, set DEEPROUTER_API_KEY yourself (or run with" >&2
-    echo "    KIDS_LLM_BYPASS_GATEWAY=1 + an Anthropic key for dogfood)." >&2
+    echo "⚠️  Parent-portal tenant-key exchange is still rolling out." >&2
+    echo "    Set DEEPROUTER_API_KEY when prompted by your parent dashboard." >&2
     exit 0
     ;;
   --update)
-    # PRD §7.4: re-run the installer. install.sh is required to be
-    # idempotent — it preserves config / server-password / api-key /
-    # device-id and only updates binaries.
     if ! command -v curl >/dev/null 2>&1; then
-      echo "kids-opencode: 'curl' not found; can't self-update." >&2
+      echo "Kids OpenCode: 'curl' not found; can't self-update." >&2
       exit 1
     fi
-    echo "kids-opencode: pulling latest installer from airbotix.ai/install/kids…" >&2
+    echo "Kids OpenCode: pulling latest installer…" >&2
     exec curl -fsSL https://airbotix.ai/install/kids | sh
     ;;
   --shutdown)
-    # Stop any running `opencode serve` at 127.0.0.1:4096 started by a previous
-    # kids-client session. Best-effort: we don't track PIDs on disk for V0 MVP
-    # (client owns its child); this is a safety hatch for dev / dogfood.
     if command -v lsof >/dev/null 2>&1; then
       pids="$(lsof -ti tcp:4096 2>/dev/null || true)"
       if [ -n "$pids" ]; then
-        echo "kids-opencode: stopping serve on :4096 (pids: $pids)" >&2
+        echo "Kids OpenCode: stopping background AI server (pid: $pids)" >&2
         # shellcheck disable=SC2086
         kill $pids 2>/dev/null || true
       else
-        echo "kids-opencode: no serve running on :4096" >&2
+        echo "Kids OpenCode: nothing running to stop." >&2
       fi
     else
-      echo "kids-opencode: 'lsof' not found; cannot stop serve programmatically." >&2
-      echo "Run 'ps aux | grep opencode' and kill the serve PID manually." >&2
+      echo "Kids OpenCode: 'lsof' not available; stop manually if needed." >&2
     fi
     exit 0
     ;;
   --version|-v)
     echo "kids-opencode $KIDS_OPENCODE_VERSION"
-    # Also show underlying opencode version
-    if command -v opencode >/dev/null 2>&1; then
-      printf "  (uses "
-      opencode --version | head -1
-      printf ")"
-    fi
-    echo ""
     exit 0
     ;;
-  --kids-help)
+  --kids-help|--help|-h)
     cat <<'HELPEOF'
-kids-opencode — a kid-safe AI coding mentor.
+kids-opencode — your kid-safe AI coding mentor.
 
 USAGE
-  kids-opencode                    Start a free-play session in the current folder
-  kids-opencode --course <pack>    Start a Course Pack session
+  kids-opencode                    Start a coding session in the current folder
+  kids-opencode --course <pack>    Start a guided Course Pack
   kids-opencode --course <pack> --mission <id>
                                    Start at a specific Mission
   kids-opencode check <mission>    Check if you finished a Mission
-  kids-opencode register           Register your family (parent does this once)
-  kids-opencode --update           Update kids-opencode to the latest version
+  kids-opencode register           Register your family (parent does once)
+  kids-opencode --update           Update to the latest version
   kids-opencode --shutdown         Stop the background AI server
   kids-opencode --version          Show version
-  kids-opencode --kids-help        Show this help (in plain language for kids)
-
-OPTIONS THAT GO TO THE AGENT
-  Any unrecognised flag (e.g. -m, --model, --print-logs) is passed through to
-  the underlying opencode CLI.
 
 EXAMPLES
+  cd ~/my-portfolio
   kids-opencode --course portfolio-site --mission mission-1
+
+  cd ~/my-portfolio
   kids-opencode check mission-1
 
-ENVIRONMENT VARIABLES
-  DEEPROUTER_API_KEY       Your family's API key from app.airbotix.ai
-  KIDS_OPENCODE_CONFIG     Override config path (default: ~/.config/kids-opencode/opencode.json)
-  KIDS_AGE_BAND            Override the age band (default: 12+)
+KEY BINDINGS (inside the session)
+  Enter           Send your message
+  y / n / e       Reply to AI's request (allow / stop / I'll do it)
+  Esc             Interrupt the AI mid-reply
+  Ctrl+C          Exit completely
 
 LEARN MORE
   https://airbotix.ai/kids-opencode
@@ -181,90 +170,54 @@ HELPEOF
 esac
 
 # ────────────────────────────────────────────────────────────────────────────
-# Flag pre-processing: translate --course / --mission into env vars
-# Anything else is left in the args to be passed to opencode.
+# 3. Flag pre-processing
 # ────────────────────────────────────────────────────────────────────────────
 
 FORWARD_ARGS=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --course)
-      shift
-      export KIDS_COURSE_PACK="${1:-}"
-      shift
-      ;;
-    --course=*)
-      export KIDS_COURSE_PACK="${1#--course=}"
-      shift
-      ;;
-    --mission)
-      shift
-      export KIDS_MISSION="${1:-}"
-      shift
-      ;;
-    --mission=*)
-      export KIDS_MISSION="${1#--mission=}"
-      shift
-      ;;
-    *)
-      # Pass-through to opencode. We deliberately do NOT shell-escape here;
-      # `exec opencode "$@"` below handles it via positional params.
-      FORWARD_ARGS="$FORWARD_ARGS $1"
-      shift
-      ;;
+    --course)       shift; export KIDS_COURSE_PACK="${1:-}"; shift ;;
+    --course=*)     export KIDS_COURSE_PACK="${1#--course=}"; shift ;;
+    --mission)      shift; export KIDS_MISSION="${1:-}"; shift ;;
+    --mission=*)    export KIDS_MISSION="${1#--mission=}"; shift ;;
+    *)              FORWARD_ARGS="$FORWARD_ARGS $1"; shift ;;
   esac
 done
 
 # ────────────────────────────────────────────────────────────────────────────
-# Pre-flight checks
+# 4. Pre-flight checks
 # ────────────────────────────────────────────────────────────────────────────
 
 if [ ! -f "$CONFIG" ]; then
-  echo "kids-opencode: config not found at $CONFIG" >&2
-  echo "" >&2
-  echo "Run the installer first:" >&2
+  echo "Kids OpenCode: setup incomplete — config not found." >&2
+  echo "Run the installer:" >&2
   echo "  curl -fsSL https://airbotix.ai/install/kids | sh" >&2
-  echo "" >&2
-  echo "Or set KIDS_OPENCODE_CONFIG to point at a config you wrote manually." >&2
   exit 1
 fi
 
 if ! command -v opencode >/dev/null 2>&1; then
-  echo "kids-opencode: 'opencode' binary not found on PATH." >&2
-  echo "" >&2
-  echo "The installer should have placed it. If you installed manually," >&2
-  echo "follow https://opencode.ai/docs/install first." >&2
+  echo "Kids OpenCode: AI engine not installed. Re-run installer:" >&2
+  echo "  curl -fsSL https://airbotix.ai/install/kids | sh" >&2
   exit 1
 fi
 
-# kids-client is the own-client TUI (Phase 2.5). When linked via
-# `bun link --cwd packages/kids-client` in dogfood, it lands on PATH.
-# When installed via the eventual `@kidsinai/kids-client` npm package,
-# the `bin` entry in its package.json drops it on PATH too.
 if ! command -v kids-client >/dev/null 2>&1; then
-  # Fallback for in-repo dev: look next to this script.
+  # Dev fallback: look next to this script in the repo.
   THIS_DIR="$(cd "$(dirname "$0")" && pwd)"
   REPO_CLIENT_BIN="$THIS_DIR/../packages/kids-client/bin/kids-client"
   if [ -x "$REPO_CLIENT_BIN" ]; then
     KIDS_CLIENT_BIN="$REPO_CLIENT_BIN"
   else
-    echo "kids-opencode: 'kids-client' binary not found on PATH." >&2
-    echo "" >&2
-    echo "If you're developing in the kids-opencode repo, run:" >&2
-    echo "  bun link --cwd packages/kids-client" >&2
-    echo "" >&2
-    echo "Otherwise reinstall:" >&2
+    echo "Kids OpenCode: kid interface not installed. Re-run installer:" >&2
     echo "  curl -fsSL https://airbotix.ai/install/kids | sh" >&2
     exit 1
   fi
 else
   KIDS_CLIENT_BIN="$(command -v kids-client)"
 fi
-export KIDS_OPENCODE_CONFIG
 
 # ────────────────────────────────────────────────────────────────────────────
-# AI-disclosure banner (compliance: every session must disclose AI use)
-# Suppressed if KIDS_OPENCODE_NO_BANNER=1 (used in CI / testing).
+# 5. AI-disclosure banner (compliance)
 # ────────────────────────────────────────────────────────────────────────────
 
 if [ "${KIDS_OPENCODE_NO_BANNER:-0}" != "1" ]; then
@@ -281,10 +234,7 @@ BANNER
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Export OPENCODE_SERVER_PASSWORD before forwarding to opencode. opencode's
-# internal HTTP server binds 127.0.0.1:4096; without this env var it runs
-# unauthenticated, allowing any other local process to drive the agent.
-# Installer generates a random password at $CONFIG_DIR/server-password.
+# 6. Load server password (Basic Auth for local AI server)
 # ────────────────────────────────────────────────────────────────────────────
 
 PASSWORD_FILE="$(dirname "$CONFIG")/server-password"
@@ -292,28 +242,16 @@ if [ -f "$PASSWORD_FILE" ]; then
   OPENCODE_SERVER_PASSWORD="$(cat "$PASSWORD_FILE")"
   export OPENCODE_SERVER_PASSWORD
 else
-  echo "kids-opencode: server-password missing at $PASSWORD_FILE" >&2
-  echo "" >&2
-  echo "This file should have been created by the installer." >&2
-  echo "Re-run the installer to regenerate it:" >&2
-  echo "  curl -fsSL https://airbotix.ai/install/kids | sh" >&2
-  echo "" >&2
+  echo "Kids OpenCode: setup incomplete — session password missing." >&2
+  echo "Reinstall: curl -fsSL https://airbotix.ai/install/kids | sh" >&2
   exit 1
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Hand off to kids-client. The client will:
-#   1. probe http://127.0.0.1:4096/app
-#   2. if down, spawn `opencode serve` as its child with our env
-#   3. poll until ready, then render the kid-warm TUI
-#   4. on its own exit, kill the serve child (V0 MVP scope)
+# 7. Hand off to kids-client (it owns the AI engine subprocess)
 # ────────────────────────────────────────────────────────────────────────────
 
-# Make the config path visible to the client (it doesn't take --config; it
-# reads $KIDS_OPENCODE_CONFIG and forwards it to opencode serve).
 export KIDS_OPENCODE_CONFIG="$CONFIG"
-
-# Provide the opencode binary path so client doesn't have to re-resolve.
 OPENCODE_BIN="$(command -v opencode)"
 export OPENCODE_BIN
 
