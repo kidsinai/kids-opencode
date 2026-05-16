@@ -9,6 +9,7 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 ## [Unreleased]
 
 ### Added
+- **`@kidsinai/kids-opencode-tui-plugin`** — new sibling npm package at `packages/kids-tui-plugin/`. Phase 2.4a TUI plugin: bundled `kids-warm` theme (49 tokens, light + dark variants, all referencing a shared palette defs object); simplified 8-binding keymap layer that masks the upstream `?` help; locale-aware kid-friendly status text (English + zh-Hans); dangerous-topic detector that pops a Kids Helpline overlay when the server-side system prompt's exact helpline phrase appears in chat output (or when a narrow self-harm hint matches); mission-progress sidebar string builder. 44 unit tests cover theme structure + audit format + every helper module. Slot-rendering work (logo / prompt / sidebar widget) deferred to Phase 2.4b — requires Solid runtime.
 - CI workflow at `.github/workflows/ci.yml` (typecheck + plugin tests + shell lint on every PR + push)
 - Release pipelines: `.github/workflows/publish-plugin.yml` (npm) and `.github/workflows/publish-installer.yml` (S3 + CloudFront + SBOM)
 - Plugin unit tests at `packages/kids-plugin/test/` (36 tests across 4 files)

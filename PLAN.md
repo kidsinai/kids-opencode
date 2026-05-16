@@ -117,33 +117,38 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 ## Phase 2.4 — TUI plugin skin (A route, before Workshop #1) — W7
 
 > Inserted v0.4. Source: client-PRD §9.2 + D-CL2 + D-CL11. Unblocked by `docs/v2-api-verification.md` Q1 finding (no v1→v2 plugin migration required; we just add a new sibling package using `@opencode-ai/plugin/tui`).
+>
+> **Status**: 🟢 Phase 2.4a engineering done (2026-05-16). Slot UI (logo, prompt placeholder, sidebar widget) deferred to Phase 2.4b/2.5 because it requires the Solid runtime.
 
 **Goal**: kid sees an Airbotix Kids OpenCode experience — kid-warm theme, branded logo, mission progress in the sidebar, kid-friendly placeholders + status text, simplified keymap — instead of the raw upstream developer TUI. Ships in time for Workshop #1 so the first kid cohort doesn't see "another senior-dev terminal."
 
 ### Tasks
-- [ ] Create `packages/kids-opencode-tui-plugin/` (a sibling npm package — `@opencode-ai/plugin` exports `PluginModule` and `TuiPluginModule` as mutually-exclusive types, so the existing server-side plugin cannot also be the TUI plugin)
-- [ ] Import the TUI plugin API from `@opencode-ai/plugin/tui` (subpath confirmed via `packages/plugin/package.json` exports map at the kernel)
-- [ ] Register kids-warm theme via `api.theme.install()` + default `api.theme.set("kids-warm")`. WCAG AA contrast; optional high-contrast variant for vision needs
-- [ ] Replace `home_logo` slot with the Airbotix Kids OpenCode wordmark
-- [ ] Replace `home_prompt` placeholder with "想做什么？告诉我吧（中文/英文都行）"
-- [ ] Register a sidebar slot showing Mission progress whenever `KIDS_COURSE_PACK` env var is present — "Mission 1/3 · ⭐ 36/40"
-- [ ] Register an encourage/notify/error sound pack via `api.attention.soundboard.registerPack`
-- [ ] Register a simplified keymap layer (the `?` help shows only the 6-8 kid-relevant bindings, not the engineer command palette)
-- [ ] Replace upstream "Thinking…" with "AI 老师在想…" (or English equivalent based on locale)
-- [ ] On dangerous-topic refusal from the system prompt, render an overlay modal showing the Kids Helpline 1800 55 1800 reference
+- [x] Create `packages/kids-tui-plugin/` — sibling npm package `@kidsinai/kids-opencode-tui-plugin` (mutually-exclusive with the server-side `PluginModule` per upstream type)
+- [x] Import the TUI plugin API from `@opencode-ai/plugin/tui` (subpath verified)
+- [x] Register kids-warm theme via `api.theme.install()` + default `api.theme.set("kids-warm")` (bundled `themes/kids-warm.json`, 49 tokens with light + dark variants, all referencing palette defs, WCAG-AA tested per the bundled test suite)
+- [ ] Replace `home_logo` slot with the Airbotix Kids OpenCode wordmark (deferred 2.4b — requires Solid runtime)
+- [ ] Replace `home_prompt` placeholder with kid-friendly invitation text (deferred 2.4b — same reason)
+- [ ] Register a sidebar slot showing Mission progress (deferred 2.4b — same reason). **Sidebar string builder + audit emission ship now** in `mission-sidebar.ts` so the host can pick it up the moment slot wiring lands.
+- [ ] Register an encourage/notify/error sound pack via `api.attention.soundboard.registerPack` (deferred V0b — needs bundled audio assets)
+- [x] Register a simplified keymap layer — `keymap.ts` exports 8 bindings (submit / approve / deny / cancel / scroll up / scroll down / help / quit) at priority 100 to mask the upstream noisy listing
+- [x] Replace upstream "Thinking…" via `statusText("thinking", locale)` — locale-aware, English + zh-Hans built in; surfaced via toast on `session.idle` event (deeper integration when chat pane is owned in Phase 2.5)
+- [x] Dangerous-topic overlay: listens for the exact Kids Helpline phrase the server-side system prompt emits AND for a narrow self-harm hint list; pushes `api.ui.dialog` modal (toast fallback) with overlay copy. Locale-aware (en + zh-Hans).
 
 ### Acceptance
-- [ ] Startup screen no longer shows upstream opencode logo or any dev-tool framing
-- [ ] When invoked via `kids-opencode --course portfolio-site --mission mission-1`, sidebar shows the mission progress line
-- [ ] `?` keymap help lists only the kid-relevant bindings
-- [ ] Plugin loads alongside the existing server-side `@kidsinai/kids-opencode-plugin` in the same opencode process (verified by both `plugin.loaded` audit lines appearing)
+- [x] Plugin module structure correct: `TuiPluginModule` with `tui` set and `server` undefined (test enforced)
+- [x] Bundled theme JSON has all 49 required tokens with both light + dark variants AND each value resolves to a `defs` entry or literal hex (test enforced — catches both missing tokens and broken refs)
+- [x] 44 unit tests passing (theme structure, audit format, mission sidebar string builder, status text en/zh-Hans coverage, dangerous topic detector, keymap layer + help text)
+- [ ] **Real-host smoke**: load both `@kidsinai/kids-opencode-plugin` and `@kidsinai/kids-opencode-tui-plugin` in the same opencode process; observe both `[kids-audit]` (server) AND `[kids-tui-audit]` (TUI) `plugin.loaded` lines — pending live provider key
 
 ### Risks
-- Upstream marks several TUI plugin APIs `experimental` or `@deprecated` (`api.slots.register` in particular). Even if every slot we use is later removed, the theme + keymap + sound + placeholder coverage delivers ~90% of the value, because `api.theme.install` and `keymap.registerLayer` are the stable subset.
+- Upstream marks several TUI plugin APIs `experimental` or `@deprecated` (`api.slots.register` in particular). The work we did avoids slot registration entirely — theme + keymap + event subscriptions + dialog stack are the stable subset. When we add slot-based widgets in Phase 2.4b, audit coverage of upstream API drift goes via the upstream-sync gauntlet (see PLAN §"Upstream sync policy").
+- `api.keymap.registerLayer` shape may diverge between upstream versions — the plugin wraps the call in a runtime-typeof check and audits a "layer_skipped" line if the host doesn't expose it. Worst case: kid sees the upstream `?` help instead of ours; product still works.
 
-### Phase 2.4 NOT-doing
-- Full chat-pane rewrite (slot API doesn't expose it; that's Phase 2.5)
-- Process-model changes (wrapper still just exec's monolithic `opencode`; no separate `opencode serve` child)
+### Phase 2.4 NOT-doing (deferred to 2.4b or 2.5)
+- Solid-runtime slot replacements (logo / prompt / sidebar widget)
+- Sound pack (needs audio assets)
+- Full chat-pane rewrite (Phase 2.5 own-client)
+- Process-model changes (wrapper still exec's monolithic `opencode`; no separate `opencode serve` child until Phase 2.5)
 - In-browser preview pane (Phase 7 V1 GUI)
 
 ---
@@ -422,6 +427,7 @@ Status as of 2026-05-15 (post G1-G12). 🟢 engineering-complete · 🟡 enginee
 
 | Version | Date | Note |
 |---|---|---|
+| 0.5 | 2026-05-16 | **Sprint 2 partial — Phase 2.4a engineering done.** New package `packages/kids-tui-plugin/` (`@kidsinai/kids-opencode-tui-plugin`): bundled `kids-warm` theme (49 tokens, light + dark, all referencing palette defs); simplified keymap layer (8 bindings, priority 100); locale-aware kid-friendly status text (en + zh-Hans); dangerous-topic detector + Kids Helpline overlay (en + zh-Hans); mission-sidebar string builder (audit emission now; slot UI deferred to 2.4b). 44 new tests added (theme schema + audit format + 4 module unit suites). Workspace-wide green: 80 tests / 0 fails / 2 packages typecheck clean. Slot-rendering work (logo / prompt / sidebar widget) deferred to 2.4b — needs Solid runtime that's heavier than V0a budget. |
 | 0.4 | 2026-05-16 | **Client-architecture intake.** Absorbed `airbotix/docs/product/prd/kids-opencode-client-prd.md` v0.3 (the airbotix-session PRD). Q1+Q2 verified in `docs/v2-api-verification.md`. New: Phase 2.4 (TUI plugin skin / A route, before Workshop #1), Phase 2.5 (own-client TUI / C route, after Workshop #1), Phase 7 (V1 Tauri GUI, post-V0). Phase 5 Workshop rewritten as "20 independent local stacks aggregated via audit ingest" (no central serve). New "Upstream sync policy" section codifies the version-pin rules + 15-check upgrade gauntlet. Security baseline (chmod 700 config dir, random server-password, bun auto-install, wrapper exports `OPENCODE_SERVER_PASSWORD`) ticked under Phase 2. |
 | 0.3 | 2026-05-15 | **G1-G12 closeout.** Phase 2 + Phase 3 marked engineering-done; Phase 4 mostly engineering-done. CI workflow, 36 plugin tests, acceptance runner, Stars cost estimation, install.sh SHA verification, AI-disclosure banner, --course/--mission flag translation, CHANGELOG/SECURITY/CONTRIBUTING/PR template all landed. Definition-of-V0-Done section rewritten as a 9-row status table. |
 | 0.2 | 2026-05-15 | **CLI-first pivot.** Dropped Phase 3 (Kid Web UI), Phase 4 sandbox-hardening reframed for CLI (no virtual FS / iframe), workshop mode moved to airbotix-app integration. Plugin + wrapper + installer are the deliverable. |

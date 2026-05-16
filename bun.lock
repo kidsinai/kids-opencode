@@ -26,9 +26,27 @@
         "@opencode-ai/sdk": ">=1.14.0",
       },
     },
+    "packages/kids-tui-plugin": {
+      "name": "@kidsinai/kids-opencode-tui-plugin",
+      "version": "0.0.1",
+      "dependencies": {
+        "@kidsinai/kids-opencode-plugin": "workspace:*",
+      },
+      "devDependencies": {
+        "@opencode-ai/plugin": "^1.14.51",
+        "@opencode-ai/sdk": "^1.14.51",
+        "typescript": "^5.7.0",
+      },
+      "peerDependencies": {
+        "@opencode-ai/plugin": ">=1.14.0",
+        "@opencode-ai/sdk": ">=1.14.0",
+      },
+    },
   },
   "packages": {
     "@kidsinai/kids-opencode-plugin": ["@kidsinai/kids-opencode-plugin@workspace:packages/kids-plugin"],
+
+    "@kidsinai/kids-opencode-tui-plugin": ["@kidsinai/kids-opencode-tui-plugin@workspace:packages/kids-tui-plugin"],
 
     "@msgpackr-extract/msgpackr-extract-darwin-arm64": ["@msgpackr-extract/msgpackr-extract-darwin-arm64@3.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-QZHtlVgbAdy2zAqNA9Gu1UpIuI8Xvsd1v8ic6B2pZmeFnFcMWiPLfWXh7TVw4eGEZ/C9TH281KwhVoeQUKbyjw=="],
 

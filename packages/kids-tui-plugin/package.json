@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@kidsinai/kids-opencode-tui-plugin",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "opencode TUI plugin that gives Kids OpenCode its kid-warm theme, simplified keymap, kid-friendly status text, Mission progress sidebar, and a Kids Helpline overlay on dangerous-topic triggers.",
+  "license": "MIT",
+  "homepage": "https://github.com/kidsinai/kids-opencode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kidsinai/kids-opencode.git",
+    "directory": "packages/kids-tui-plugin"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-tui-plugin",
+    "kids",
+    "education",
+    "k-12",
+    "theme"
+  ],
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "themes",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.14.0",
+    "@opencode-ai/sdk": ">=1.14.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "^1.14.51",
+    "@opencode-ai/sdk": "^1.14.51",
+    "typescript": "^5.7.0"
+  },
+  "dependencies": {
+    "@kidsinai/kids-opencode-plugin": "workspace:*"
+  }
+}
