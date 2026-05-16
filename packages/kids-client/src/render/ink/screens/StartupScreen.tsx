@@ -2,15 +2,16 @@
  * §3.1 Startup screen — first impression. Must paint within 5s.
  *
  * Quick keys:
- *   Enter → start a free-play session
- *   c     → choose a Course Pack (V0 MVP: hardcoded portfolio-site)
- *   r     → resume the last session (V0 MVP: not implemented yet)
- *   h     → show help (kid-friendly)
+ *   Enter → start a free-play session OR continue if a course pack is set
+ *   c     → choose a Course Pack
+ *   r     → resume the last session
+ *   h     → show kid-friendly help
  */
 
 import React from "react"
 import { Box, Text, useInput } from "ink"
 import { getTheme } from "../theme.ts"
+import { KidsLogo } from "../components/KidsLogo.tsx"
 import { KeyHints } from "../components/KeyHints.tsx"
 
 interface StartupScreenProps {
@@ -29,23 +30,23 @@ export function StartupScreen({ locale, coursePack, onStart }: StartupScreenProp
   })
   const t = STRINGS[locale]
   return (
-    <Box flexDirection="column" paddingY={1}>
-      <Box borderStyle="double" borderColor={theme.border} paddingX={2} paddingY={1} flexDirection="column">
-        <Text color={theme.accent} bold>
-          Airbotix Kids OpenCode
-        </Text>
-        <Box marginTop={1} flexDirection="column">
-          <Text color={theme.fg}>{t.greet1}</Text>
-          <Text color={theme.fg}>{t.greet2}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color={theme.fgDim}>{t.disclaim}</Text>
-        </Box>
-        <Box marginTop={1}>
-          <Text color={theme.warn}>{t.helpline}</Text>
-        </Box>
+    <Box flexDirection="column" alignItems="center" paddingY={1}>
+      <KidsLogo />
+      <Box marginTop={1} flexDirection="column" alignItems="center">
+        <Text color={theme.kid} bold>{t.tagline}</Text>
+      </Box>
+      <Box marginTop={1} flexDirection="column" alignItems="center">
+        <Text color={theme.fg}>{t.line1}</Text>
+        <Text color={theme.fg}>{t.line2}</Text>
+        <Text color={theme.fg}>{t.line3}</Text>
       </Box>
       <Box marginTop={1}>
+        <Text color={theme.fgDim}>{t.disclaim}</Text>
+      </Box>
+      <Box marginTop={1}>
+        <Text color={theme.warn} bold>{t.helpline}</Text>
+      </Box>
+      <Box marginTop={2}>
         <KeyHints hints={[
           { key: "Enter", label: coursePack ? t.startCourse : t.startFree },
           { key: "c", label: t.pickCourse },
@@ -59,10 +60,12 @@ export function StartupScreen({ locale, coursePack, onStart }: StartupScreenProp
 
 const STRINGS = {
   "zh-Hans": {
-    greet1: "你好！我是 Kids OpenCode —— 帮你做编程项目的 AI 老师。",
-    greet2: "",
-    disclaim: "我不是真人，有时候会答错。遇到不懂的，问家长或老师。",
-    helpline: "澳大利亚紧急求助：Kids Helpline 1800 55 1800",
+    tagline: "🤖  你的 AI 编程伙伴  🤖",
+    line1: "✨  跟 AI 一起做真实的项目",
+    line2: "💡  没有工程师术语，听得懂",
+    line3: "🎯  做完一关 → 庆祝下一关",
+    disclaim: "我不是真人，有时候会答错。问家长或老师。",
+    helpline: "🇦🇺  紧急求助：Kids Helpline 1800 55 1800",
     startFree: "开始新项目",
     startCourse: "继续 Course Pack",
     pickCourse: "选 Course Pack",
@@ -70,10 +73,12 @@ const STRINGS = {
     help: "帮助",
   },
   en: {
-    greet1: "Hi! I'm Kids OpenCode — the AI teacher who helps you build coding projects.",
-    greet2: "",
-    disclaim: "I'm not a real person and I can be wrong. Ask a parent or teacher if you're unsure.",
-    helpline: "In Australia: Kids Helpline 1800 55 1800",
+    tagline: "🤖  Your AI coding buddy  🤖",
+    line1: "✨  Build real projects with AI help",
+    line2: "💡  No engineering jargon — easy to follow",
+    line3: "🎯  Finish a mission → celebrate the next one",
+    disclaim: "I'm not a real person and I can be wrong. Ask a parent or teacher.",
+    helpline: "🇦🇺  Emergency: Kids Helpline 1800 55 1800",
     startFree: "Start a new project",
     startCourse: "Continue Course Pack",
     pickCourse: "Pick a Course Pack",

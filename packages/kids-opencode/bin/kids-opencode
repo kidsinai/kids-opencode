@@ -20,8 +20,9 @@
 #   8. exec kids-client; kids-client supervises the AI engine.
 set -e
 
-KIDS_OPENCODE_VERSION="0.0.2"
+KIDS_OPENCODE_VERSION="0.0.3"
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
+CONFIG_DIR_WRAPPER="$(dirname "$CONFIG")"
 
 # ────────────────────────────────────────────────────────────────────────────
 # 1. PATH bootstrap (idempotent)
@@ -33,6 +34,17 @@ for d in "$HOME/.bun/bin" "$HOME/.opencode/bin" "$HOME/.local/bin"; do
   esac
 done
 export PATH
+
+# ────────────────────────────────────────────────────────────────────────────
+# 1b. Source env file written by the setup wizard (ANTHROPIC_API_KEY etc.)
+# ────────────────────────────────────────────────────────────────────────────
+KIDS_ENV_FILE="$CONFIG_DIR_WRAPPER/env"
+if [ -f "$KIDS_ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  . "$KIDS_ENV_FILE"
+  set +a
+fi
 
 # ────────────────────────────────────────────────────────────────────────────
 # 2. Resolve symlink — npm/bun put a shim in ~/.bun/bin/ pointing at the

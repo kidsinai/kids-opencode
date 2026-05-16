@@ -29,6 +29,7 @@ import { readLastSession, writeLastSession } from "./core/last-session.ts"
 import { isCompletionTrigger, runCheck } from "./core/check-runner.ts"
 import { App } from "./render/ink/App.tsx"
 import { detectDangerousTopicEn, detectDangerousTopicZh } from "./dangerous-topic-bridge.ts"
+import { saveSetup, type ProviderId } from "./core/setup.ts"
 import type { InstalledPack } from "./core/course-pack.ts"
 import { findMission, loadCoursePack } from "@kidsinai/kids-opencode-plugin"
 
@@ -44,6 +45,14 @@ async function main(): Promise<void> {
 
   const check = validateEnv(env)
   if (!check.ok) {
+    if (check.variant === "needs_setup") {
+      // First-run wizard. Render the setup screen; the wizard's onSave
+      // writes config + env file, then re-launches main() to pick up
+      // the new key.
+      store.update({ screen: { kind: "setup" } })
+      renderApp(store, env, installedPacks, baseHandlers(store, env, null, null, null))
+      return
+    }
     store.update({ screen: { kind: "error", variant: check.variant, detail: check.reason } })
     renderApp(store, env, installedPacks, baseHandlers(store, env, null, null, null))
     return
@@ -197,6 +206,28 @@ interface AppHandlers {
   onPickerBack: () => void
   onMissionNext: () => void
   onMissionBack: () => void
+  onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+  onSetupSkip: () => void
+}
+
+function makeSetupHandlers(store: Store, env: ReturnType<typeof readEnv>): Pick<AppHandlers, "onSetupSave" | "onSetupSkip"> {
+  return {
+    onSetupSave: async (provider, apiKey) => {
+      try {
+        saveSetup({ configDir: env.configDir, provider, apiKey })
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+      }
+    },
+    onSetupSkip: () => {
+      // After setup completes (or user skips), tell the user to restart so
+      // the wrapper picks up the new env file. Re-launching main() in-process
+      // would require tearing down Ink which is messy; a re-exec is cleaner.
+      process.stderr.write("\nKids OpenCode: setup saved. Please run `kids-opencode` again to start.\n")
+      process.exit(0)
+    },
+  }
 }
 
 /**
@@ -212,6 +243,7 @@ function baseHandlers(
   serve: ServeManager | null,
 ): AppHandlers {
   const noop = (): void => {}
+  const setup = makeSetupHandlers(store, env)
   return {
     onStart: noop,
     onPrompt: noop,
@@ -245,6 +277,7 @@ function baseHandlers(
     onPickerBack: () => store.update({ screen: { kind: "startup" } }),
     onMissionNext: noop,
     onMissionBack: noop,
+    ...setup,
   }
 }
 
@@ -447,6 +480,7 @@ function fullHandlers(
       })
     },
     onMissionBack: () => store.update({ screen: { kind: "mission" } }),
+    ...makeSetupHandlers(store, env),
   }
 }
 

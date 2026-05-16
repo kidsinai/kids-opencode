@@ -9,6 +9,7 @@
 
 export type Screen =
   | { kind: "loading"; message?: string }
+  | { kind: "setup" }
   | { kind: "startup" }
   | { kind: "mission" }
   | { kind: "help" }

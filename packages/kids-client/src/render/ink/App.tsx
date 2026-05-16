@@ -21,6 +21,8 @@ import { HelpScreen } from "./screens/HelpScreen.tsx"
 import { CoursePackPicker } from "./screens/CoursePackPicker.tsx"
 import { MissionCompleteScreen } from "./screens/MissionCompleteScreen.tsx"
 import { LoadingScreen } from "./screens/LoadingScreen.tsx"
+import { SetupScreen } from "./screens/SetupScreen.tsx"
+import type { ProviderId } from "../../core/setup.ts"
 
 export interface AppDeps {
   store: Store
@@ -38,6 +40,8 @@ export interface AppDeps {
   onPickerBack: () => void
   onMissionNext: () => void
   onMissionBack: () => void
+  onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+  onSetupSkip: () => void
 }
 
 export function App(deps: AppDeps): React.ReactElement {
@@ -69,6 +73,8 @@ export function App(deps: AppDeps): React.ReactElement {
   switch (state.screen.kind) {
     case "loading":
       return <LoadingScreen locale={deps.locale} message={state.screen.message} />
+    case "setup":
+      return <SetupScreen locale={deps.locale} onSave={deps.onSetupSave} onSkip={deps.onSetupSkip} />
     case "startup":
       return <StartupScreen locale={deps.locale} coursePack={state.coursePack} onStart={deps.onStart} />
     case "mission":

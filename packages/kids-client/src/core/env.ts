@@ -50,7 +50,7 @@ export function readEnv(): KidsClientEnv {
   }
 }
 
-export function validateEnv(env: KidsClientEnv): { ok: true } | { ok: false; reason: string; variant: "config_missing" | "auth_failed" } {
+export function validateEnv(env: KidsClientEnv): { ok: true } | { ok: false; reason: string; variant: "config_missing" | "auth_failed" | "needs_setup" } {
   if (!env.opencodeServerPassword) {
     return {
       ok: false,
@@ -58,11 +58,18 @@ export function validateEnv(env: KidsClientEnv): { ok: true } | { ok: false; rea
       variant: "config_missing",
     }
   }
-  if (!env.bypassGateway && !env.deeprouterApiKey) {
+  // Accept any supported provider's API key, not just DeepRouter. The
+  // setup wizard writes whatever the parent picked into ~/.config/kids-opencode/env
+  // which the wrapper sources before exec.
+  const hasAnyKey =
+    env.deeprouterApiKey
+    || process.env.ANTHROPIC_API_KEY
+    || process.env.OPENAI_API_KEY
+  if (!env.bypassGateway && !hasAnyKey) {
     return {
       ok: false,
-      reason: "DEEPROUTER_API_KEY is empty. Run `kids-opencode register` first, or set KIDS_LLM_BYPASS_GATEWAY=1 with a provider key for dogfood.",
-      variant: "auth_failed",
+      reason: "No LLM provider key found. The first-run setup wizard will walk you through this.",
+      variant: "needs_setup",
     }
   }
   return { ok: true }
