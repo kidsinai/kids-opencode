@@ -76,7 +76,7 @@ describe("validateEnv", () => {
       noBanner: false,
     })
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.variant).toBe("auth_failed")
+    if (!result.ok) expect(result.variant).toBe("needs_setup")
   })
 
   test("accepts BYOK bypass with no API key", () => {

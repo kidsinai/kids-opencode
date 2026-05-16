@@ -41,6 +41,7 @@ export interface AppDeps {
   onMissionNext: () => void
   onMissionBack: () => void
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+  onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
 }
 
@@ -74,7 +75,7 @@ export function App(deps: AppDeps): React.ReactElement {
     case "loading":
       return <LoadingScreen locale={deps.locale} message={state.screen.message} />
     case "setup":
-      return <SetupScreen locale={deps.locale} onSave={deps.onSetupSave} onSkip={deps.onSetupSkip} />
+      return <SetupScreen locale={deps.locale} onSave={deps.onSetupSave} onContinue={deps.onSetupContinue} onSkip={deps.onSetupSkip} />
     case "startup":
       return <StartupScreen locale={deps.locale} coursePack={state.coursePack} onStart={deps.onStart} />
     case "mission":

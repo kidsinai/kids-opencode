@@ -13,8 +13,7 @@ describe("StartupScreen", () => {
       }),
     )
     const frame = lastFrame() ?? ""
-    expect(frame).toContain("Airbotix Kids OpenCode")
-    expect(frame).toContain("Kids OpenCode")
+    expect(frame).toContain("AI 编程伙伴")
     expect(frame).toContain("1800 55 1800")
   })
 
@@ -27,8 +26,8 @@ describe("StartupScreen", () => {
       }),
     )
     const frame = lastFrame() ?? ""
-    expect(frame).toContain("AI teacher")
-    expect(frame).toContain("1800 55 1800")
+    expect(frame).toContain("AI coding buddy")
+    expect(frame).toContain("Kids Helpline")
   })
 
   test("shows 'continue course pack' label when coursePack is set", () => {

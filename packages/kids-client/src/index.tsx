@@ -1,23 +1,26 @@
 /**
  * kids-client entry. Composes core/* and renders the Ink app.
  *
- * Boot sequence:
- *   1. readEnv()      — pull KIDS_* + OPENCODE_* from process.env
- *   2. validateEnv()  — hard-fail with ErrorScreen if password/key missing
- *   3. ServeManager.ensureReady() — spawn `opencode serve` if down, poll /app
- *   4. createKidsClient() — instantiate SDK v2 client w/ Basic Auth
- *   5. SessionManager — ready to prompt
- *   6. EventSubscriber.run() — SSE loop dispatches to store
- *   7. Ink render(<App />) — kid sees Startup screen, picks a flow
+ * Boot orchestration (V0.0.3):
+ *   1. readEnv + initial render in "loading"
+ *   2. validateEnv:
+ *      - "needs_setup" → render SetupScreen, await user completion,
+ *         reload env from file, re-validate, continue inline
+ *      - "config_missing" / "auth_failed" → error screen, exit
+ *      - ok → fall through to bootServices
+ *   3. bootServices: audit pipeline + opencode serve subprocess +
+ *      SDK v2 client + SSE subscriber + SIGINT/SIGTERM
+ *   4. Render startup screen; user picks a flow.
  *
- * Cleanup on SIGINT / SIGTERM: stop subscriber, stop audit pipeline,
- * kill serve child, exit. (V0 MVP: client crash takes serve with it.)
+ * Inline boot guarantee: the user never sees "run kids-opencode again".
+ * SetupScreen → save → reload env → boot serve → MissionScreen,
+ * all in the SAME process.
  */
 
 import React from "react"
 import { render } from "ink"
 import { join } from "node:path"
-import { readEnv, validateEnv } from "./core/env.ts"
+import { readEnv, validateEnv, type KidsClientEnv } from "./core/env.ts"
 import { ServeManager } from "./core/serve-manager.ts"
 import { createKidsClient, type OpencodeClient } from "./core/connection.ts"
 import { SessionManager } from "./core/session.ts"
@@ -30,57 +33,176 @@ import { isCompletionTrigger, runCheck } from "./core/check-runner.ts"
 import { App } from "./render/ink/App.tsx"
 import { detectDangerousTopicEn, detectDangerousTopicZh } from "./dangerous-topic-bridge.ts"
 import { saveSetup, type ProviderId } from "./core/setup.ts"
+import { reloadEnvFile } from "./core/env-reload.ts"
 import type { InstalledPack } from "./core/course-pack.ts"
-import { findMission, loadCoursePack } from "@kidsinai/kids-opencode-plugin"
+import { loadCoursePack } from "@kidsinai/kids-opencode-plugin"
+
+interface ServiceSet {
+  audit: AuditPipeline
+  serve: ServeManager
+  client: OpencodeClient
+  session: SessionManager
+  subscriber: EventSubscriber
+  quit: () => Promise<void>
+  handlers: FullHandlers
+}
+
+interface FullHandlers {
+  onStart: (mode: "free" | "course" | "resume" | "help") => void
+  onPrompt: (text: string) => Promise<void>
+  onPermissionReply: (decision: "allow" | "deny" | "edit") => Promise<void>
+  onAbort: () => Promise<void>
+  onErrorRetry: () => Promise<void>
+  onPickPack: (packId: string) => void
+  onMissionNext: () => void
+}
+
+interface AppHandlers {
+  onStart: (mode: "free" | "course" | "resume" | "help") => void
+  onPrompt: (text: string) => void
+  onPermissionReply: (decision: "allow" | "deny" | "edit") => void
+  onDangerousAcknowledge: () => void
+  onErrorRetry: () => void | Promise<void>
+  onQuit: () => void | Promise<void>
+  onAbort: () => void
+  onHelpBack: () => void
+  onPickPack: (packId: string) => void
+  onPickerBack: () => void
+  onMissionNext: () => void
+  onMissionBack: () => void
+  onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+  onSetupContinue: () => Promise<void>
+  onSetupSkip: () => void
+}
 
 async function main(): Promise<void> {
-  const env = readEnv()
+  const env: KidsClientEnv = readEnv()
   const store = new Store()
   const installedPacks = listInstalledPacks()
+
   store.update({
     coursePack: env.coursePack,
     mission: env.mission,
     screen: { kind: "loading", message: env.locale === "zh-Hans" ? "正在唤醒 AI 老师…" : "Waking up the AI teacher…" },
   })
 
-  const check = validateEnv(env)
+  // Resolve course pack metadata upfront if available.
+  applyCoursePackContext(env, store)
+
+  // Mutable holder for service set; populated by bootServices().
+  const servicesHolder: { current: ServiceSet | null } = { current: null }
+
+  // Promise that the SetupScreen flow resolves when the user has completed
+  // (or chosen to skip) setup. main() awaits it before continuing.
+  let resolveSetup: (() => void) | null = null
+  const setupGate = new Promise<void>((r) => { resolveSetup = r })
+
+  const handlers: AppHandlers = makeHandlers(store, env, servicesHolder, resolveSetupFn => {
+    resolveSetup = resolveSetupFn
+  }, () => resolveSetup)
+
+  renderApp(store, env, installedPacks, handlers)
+
+  // First validation pass.
+  let check = validateEnv(env)
+  if (!check.ok && check.variant === "needs_setup") {
+    store.update({ screen: { kind: "setup" } })
+    await setupGate
+
+    // Re-source env file (the setup wizard wrote it).
+    reloadEnvFile(env.configDir)
+    Object.assign(env, readEnv())
+    check = validateEnv(env)
+  }
+
   if (!check.ok) {
-    if (check.variant === "needs_setup") {
-      // First-run wizard. Render the setup screen; the wizard's onSave
-      // writes config + env file, then re-launches main() to pick up
-      // the new key.
-      store.update({ screen: { kind: "setup" } })
-      renderApp(store, env, installedPacks, baseHandlers(store, env, null, null, null))
-      return
-    }
-    store.update({ screen: { kind: "error", variant: check.variant, detail: check.reason } })
-    renderApp(store, env, installedPacks, baseHandlers(store, env, null, null, null))
+    const variant = check.variant === "needs_setup" ? "auth_failed" : check.variant
+    store.update({ screen: { kind: "error", variant, detail: check.reason } })
     return
   }
 
-  // Resolve course pack context up front (free-play if coursePack is null).
-  const ctx = resolveContext(env.coursePack, env.mission)
-  if (ctx) {
-    store.update({
-      packTitle: ctx.packTitle,
-      missionTitle: ctx.missionTitle,
-      missionIndex: ctx.missionIndex,
-      missionTotal: ctx.missionTotal,
-      starsBudget: ctx.starsBudget,
-      starsBalance: ctx.starsBudget, // start full; charges deduct via audit hook
-    })
-  } else if (env.coursePack) {
-    // Pack id provided but not found — surface as a toast on the startup screen.
-    store.update({
-      toast: {
-        kind: "warn",
-        text: env.locale === "zh-Hans"
-          ? `没找到 Course Pack: ${env.coursePack}（按 c 重新选）`
-          : `Course Pack not found: ${env.coursePack} (press c to pick)`,
-      },
-    })
+  // Bootstrap services in-process. Loading screen is shown while we wait.
+  store.update({
+    screen: {
+      kind: "loading",
+      message: env.locale === "zh-Hans" ? "启动 AI 引擎…" : "Starting AI engine…",
+    },
+  })
+
+  const services = await bootServices(env, store)
+  if (!services) {
+    // bootServices already updated the store with the failure screen.
+    return
+  }
+  servicesHolder.current = services
+
+  // SIGINT / SIGTERM cleanly tears down.
+  process.on("SIGINT", () => void services.quit())
+  process.on("SIGTERM", () => void services.quit())
+
+  // Land on startup screen.
+  store.update({ screen: { kind: "startup" } })
+}
+
+// ─── handler factory ──────────────────────────────────────────────────────
+
+function makeHandlers(
+  store: Store,
+  env: KidsClientEnv,
+  servicesHolder: { current: ServiceSet | null },
+  _setResolveSetup: (fn: (() => void) | null) => void,
+  getResolveSetup: () => (() => void) | null,
+): AppHandlers {
+  const ifBooted = <A extends unknown[]>(fn: (s: ServiceSet, ...args: A) => unknown) => (...args: A) => {
+    const s = servicesHolder.current
+    if (s) return fn(s, ...args)
+    return undefined
   }
 
+  return {
+    onStart: ifBooted((s, mode: "free" | "course" | "resume" | "help") => s.handlers.onStart(mode)),
+    onPrompt: ifBooted((s, text: string) => s.handlers.onPrompt(text)),
+    onPermissionReply: ifBooted((s, d: "allow" | "deny" | "edit") => s.handlers.onPermissionReply(d)),
+    onDangerousAcknowledge: () => store.update({ dangerousTopic: null }),
+    onErrorRetry: async () => {
+      const s = servicesHolder.current
+      if (s) return s.handlers.onErrorRetry()
+      // Pre-boot error retry: re-run main isn't trivial; just exit.
+      process.exit(1)
+    },
+    onQuit: async () => {
+      const s = servicesHolder.current
+      if (s) return s.quit()
+      process.exit(0)
+    },
+    onAbort: ifBooted((s) => s.handlers.onAbort()),
+    onHelpBack: () => store.update({ screen: { kind: "startup" } }),
+    onPickPack: ifBooted((s, id: string) => s.handlers.onPickPack(id)),
+    onPickerBack: () => store.update({ screen: { kind: "startup" } }),
+    onMissionNext: ifBooted((s) => s.handlers.onMissionNext()),
+    onMissionBack: () => store.update({ screen: { kind: "mission" } }),
+    onSetupSave: async (provider, apiKey) => {
+      try {
+        saveSetup({ configDir: env.configDir, provider, apiKey })
+        return { ok: true }
+      } catch (err) {
+        return { ok: false, reason: err instanceof Error ? err.message : String(err) }
+      }
+    },
+    onSetupContinue: async () => {
+      const r = getResolveSetup()
+      if (r) r()
+    },
+    onSetupSkip: () => {
+      const r = getResolveSetup()
+      if (r) r()
+    },
+  }
+}
+
+// ─── service bootstrap ────────────────────────────────────────────────────
+
+async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSet | null> {
   const audit = new AuditPipeline({
     bufferPath: join(env.configDir, "audit-buffer.jsonl"),
   })
@@ -100,8 +222,7 @@ async function main(): Promise<void> {
   const readiness = await serve.ensureReady()
   if (readiness.kind === "timeout") {
     store.update({ screen: { kind: "error", variant: "serve_unreachable", detail: readiness.lastError } })
-    renderApp(store, env, installedPacks, baseHandlers(store, env, null, null, serve))
-    return
+    return null
   }
 
   const client = createKidsClient({
@@ -114,8 +235,8 @@ async function main(): Promise<void> {
     onSessionCreated: (e) => {
       store.update({ sessionId: e.sessionID })
       writeLastSession(env.configDir, {
-        coursePack: env.coursePack,
-        mission: env.mission,
+        coursePack: store.getSnapshot().coursePack,
+        mission: store.getSnapshot().mission,
         lastActiveAt: new Date().toISOString(),
         projectDir: process.cwd(),
       })
@@ -137,7 +258,6 @@ async function main(): Promise<void> {
     },
     onTextEnded: (e) => store.endStream(e.messageID),
     onPermissionAsked: (e) => {
-      // pickup of stars_estimated from the latest plugin audit event.
       const recentAudit = store.getSnapshot().auditBuffer.slice(-10).reverse() as Array<Record<string, unknown>>
       const matching = recentAudit.find(
         (a) => a && typeof a === "object" && a.event === "tool.execute.before" && a.tool === e.tool,
@@ -174,121 +294,25 @@ async function main(): Promise<void> {
   })
   void subscriber.run()
 
-  // First screen: startup. If env already had a course pack, kid can either
-  // jump straight in (Enter) or pick a different one (c).
-  store.update({ screen: { kind: "startup" } })
-
-  const handleQuit = async (): Promise<void> => {
+  const quit = async (): Promise<void> => {
     subscriber.stop()
     await audit.stop()
     await serve.shutdown()
     process.exit(0)
   }
-  process.on("SIGINT", () => void handleQuit())
-  process.on("SIGTERM", () => void handleQuit())
 
-  const handlers = fullHandlers(store, env, session, client, serve, handleQuit)
-  renderApp(store, env, installedPacks, handlers)
+  const handlers = makeFullHandlers(store, env, session, client, serve)
+
+  return { audit, serve, client, session, subscriber, quit, handlers }
 }
 
-// ─── handler factories ───────────────────────────────────────────────────
-
-interface AppHandlers {
-  onStart: (mode: "free" | "course" | "resume" | "help") => void
-  onPrompt: (text: string) => void
-  onPermissionReply: (decision: "allow" | "deny" | "edit") => void
-  onDangerousAcknowledge: () => void
-  onErrorRetry: () => void | Promise<void>
-  onQuit: () => void | Promise<void>
-  onAbort: () => void
-  onHelpBack: () => void
-  onPickPack: (packId: string) => void
-  onPickerBack: () => void
-  onMissionNext: () => void
-  onMissionBack: () => void
-  onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
-  onSetupSkip: () => void
-}
-
-function makeSetupHandlers(store: Store, env: ReturnType<typeof readEnv>): Pick<AppHandlers, "onSetupSave" | "onSetupSkip"> {
-  return {
-    onSetupSave: async (provider, apiKey) => {
-      try {
-        saveSetup({ configDir: env.configDir, provider, apiKey })
-        return { ok: true }
-      } catch (err) {
-        return { ok: false, reason: err instanceof Error ? err.message : String(err) }
-      }
-    },
-    onSetupSkip: () => {
-      // After setup completes (or user skips), tell the user to restart so
-      // the wrapper picks up the new env file. Re-launching main() in-process
-      // would require tearing down Ink which is messy; a re-exec is cleaner.
-      process.stderr.write("\nKids OpenCode: setup saved. Please run `kids-opencode` again to start.\n")
-      process.exit(0)
-    },
-  }
-}
-
-/**
- * Minimal handlers for the pre-validation / pre-readiness error path.
- * Many actions are no-ops because the app isn't fully booted; quit is
- * the realistic action.
- */
-function baseHandlers(
+function makeFullHandlers(
   store: Store,
-  env: ReturnType<typeof readEnv>,
-  _session: SessionManager | null,
-  _client: OpencodeClient | null,
-  serve: ServeManager | null,
-): AppHandlers {
-  const noop = (): void => {}
-  const setup = makeSetupHandlers(store, env)
-  return {
-    onStart: noop,
-    onPrompt: noop,
-    onPermissionReply: noop,
-    onDangerousAcknowledge: () => store.update({ dangerousTopic: null }),
-    onErrorRetry: async () => {
-      if (!serve) {
-        process.exit(1)
-        return
-      }
-      store.update({
-        screen: {
-          kind: "loading",
-          message: env.locale === "zh-Hans" ? "再试一次…" : "Trying again…",
-        },
-      })
-      const again = await serve.ensureReady()
-      if (again.kind === "timeout") {
-        store.update({ screen: { kind: "error", variant: "serve_unreachable", detail: again.lastError } })
-      } else {
-        store.update({ screen: { kind: "startup" } })
-      }
-    },
-    onQuit: async () => {
-      if (serve) await serve.shutdown()
-      process.exit(0)
-    },
-    onAbort: noop,
-    onHelpBack: () => store.update({ screen: { kind: "startup" } }),
-    onPickPack: noop,
-    onPickerBack: () => store.update({ screen: { kind: "startup" } }),
-    onMissionNext: noop,
-    onMissionBack: noop,
-    ...setup,
-  }
-}
-
-function fullHandlers(
-  store: Store,
-  env: ReturnType<typeof readEnv>,
+  env: KidsClientEnv,
   session: SessionManager,
   client: OpencodeClient,
   serve: ServeManager,
-  quit: () => Promise<void>,
-): AppHandlers {
+): FullHandlers {
   const updateLastSession = (): void => {
     writeLastSession(env.configDir, {
       coursePack: store.getSnapshot().coursePack,
@@ -329,10 +353,9 @@ function fullHandlers(
           refreshContext()
           flashToast(store, {
             kind: "info",
-            text:
-              env.locale === "zh-Hans"
-                ? `继续上次：${last.coursePack}${last.mission ? " · " + last.mission : ""}`
-                : `Resuming: ${last.coursePack}${last.mission ? " · " + last.mission : ""}`,
+            text: env.locale === "zh-Hans"
+              ? `继续上次：${last.coursePack}${last.mission ? " · " + last.mission : ""}`
+              : `Resuming: ${last.coursePack}${last.mission ? " · " + last.mission : ""}`,
           })
         } else {
           flashToast(store, {
@@ -343,14 +366,12 @@ function fullHandlers(
         store.update({ screen: { kind: "mission" } })
         return
       }
-      // mode === "free" (or unrecognised) — enter MissionScreen.
       store.update({ screen: { kind: "mission" } })
     },
     onPrompt: async (text) => {
       const snap = store.getSnapshot()
       store.appendMessage({ id: `kid-${Date.now()}`, actor: "kid", text, streaming: false, ts: Date.now() })
 
-      // In-TUI mission check intercept. Don't even hit the LLM.
       if (snap.mission && isCompletionTrigger(text, env.locale)) {
         const outcome = runCheck({
           missionId: snap.mission,
@@ -384,14 +405,12 @@ function fullHandlers(
         return
       }
 
-      // Dangerous topic intercept on kid input.
       const hit = env.locale === "zh-Hans" ? detectDangerousTopicZh(text) : detectDangerousTopicEn(text)
       if (hit) {
         store.update({ dangerousTopic: { category: hit, snippet: text } })
         return
       }
 
-      // Normal LLM prompt.
       store.update({ thinking: true })
       updateLastSession()
       try {
@@ -412,17 +431,23 @@ function fullHandlers(
         if (decision === "edit") {
           flashToast(store, {
             kind: "info",
-            text:
-              env.locale === "zh-Hans"
-                ? "你来改这一步，告诉 AI 你想怎么做"
-                : "You take this step — tell the AI what you'd prefer",
+            text: env.locale === "zh-Hans"
+              ? "你来改这一步，告诉 AI 你想怎么做"
+              : "You take this step — tell the AI what you'd prefer",
           })
         }
-      } catch {
-        // SSE will surface the timeout / error via onLlmError.
-      }
+      } catch { /* SSE surfaces errors */ }
     },
-    onDangerousAcknowledge: () => store.update({ dangerousTopic: null }),
+    onAbort: async () => {
+      try {
+        await session.abort()
+        store.update({ thinking: false })
+        flashToast(store, {
+          kind: "warn",
+          text: env.locale === "zh-Hans" ? "已停止" : "Stopped",
+        })
+      } catch { /* ignore */ }
+    },
     onErrorRetry: async () => {
       store.update({
         screen: {
@@ -437,26 +462,11 @@ function fullHandlers(
         store.update({ screen: { kind: "startup" } })
       }
     },
-    onQuit: quit,
-    onAbort: async () => {
-      try {
-        await session.abort()
-        store.update({ thinking: false })
-        flashToast(store, {
-          kind: "warn",
-          text: env.locale === "zh-Hans" ? "已停止" : "Stopped",
-        })
-      } catch {
-        // ignore
-      }
-    },
-    onHelpBack: () => store.update({ screen: { kind: "startup" } }),
     onPickPack: (packId) => {
       store.update({ coursePack: packId, mission: null })
       refreshContext()
       store.update({ screen: { kind: "mission" } })
     },
-    onPickerBack: () => store.update({ screen: { kind: "startup" } }),
     onMissionNext: () => {
       const snap = store.getSnapshot()
       if (!snap.coursePack || !snap.mission) {
@@ -479,16 +489,37 @@ function fullHandlers(
         text: env.locale === "zh-Hans" ? `开始：${next.title}` : `Starting: ${next.title}`,
       })
     },
-    onMissionBack: () => store.update({ screen: { kind: "mission" } }),
-    ...makeSetupHandlers(store, env),
   }
 }
 
-// ─── utilities ───────────────────────────────────────────────────────────
+// ─── helpers ──────────────────────────────────────────────────────────────
+
+function applyCoursePackContext(env: KidsClientEnv, store: Store): void {
+  const ctx = resolveContext(env.coursePack, env.mission)
+  if (ctx) {
+    store.update({
+      packTitle: ctx.packTitle,
+      missionTitle: ctx.missionTitle,
+      missionIndex: ctx.missionIndex,
+      missionTotal: ctx.missionTotal,
+      starsBudget: ctx.starsBudget,
+      starsBalance: ctx.starsBudget,
+    })
+  } else if (env.coursePack) {
+    store.update({
+      toast: {
+        kind: "warn",
+        text: env.locale === "zh-Hans"
+          ? `没找到 Course Pack: ${env.coursePack}（按 c 重新选）`
+          : `Course Pack not found: ${env.coursePack} (press c to pick)`,
+      },
+    })
+  }
+}
 
 function renderApp(
   store: Store,
-  env: ReturnType<typeof readEnv>,
+  env: KidsClientEnv,
   installedPacks: InstalledPack[],
   handlers: AppHandlers,
 ): void {
@@ -535,11 +566,6 @@ function errMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   return String(err)
 }
-
-// Touch findMission so TS doesn't complain about the import being unused
-// when typecheck runs against the v0.0.1 SDK that doesn't expose v2 yet.
-void findMission
-void loadCoursePack
 
 void main().catch((err) => {
   console.error("kids-client: fatal startup error:", err)

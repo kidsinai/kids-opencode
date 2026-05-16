@@ -4,18 +4,17 @@
  *
  * Audience: a parent (the kid sees the intro and is told to grab a
  * grown-up). The wizard walks through:
+ *   0. engine_install (auto, only if upstream opencode CLI missing)
  *   1. Welcome / "this part needs a grown-up"
  *   2. Pick provider (Anthropic / OpenAI / DeepRouter)
  *   3. Paste API key (with link to where to get one)
- *   4. Save → re-validate → route to startup
- *
- * The choice is persisted via core/setup.ts (writes ~/.config/kids-opencode/env
- * + updates opencode.json provider section).
+ *   4. Save → continue inline (no re-exec) → MissionScreen
  */
 
-import React, { useState } from "react"
+import React, { useEffect, useState } from "react"
 import { Box, Text, useInput } from "ink"
 import TextInput from "ink-text-input"
+import Spinner from "ink-spinner"
 import { getTheme } from "../theme.ts"
 import { KidsLogo } from "../components/KidsLogo.tsx"
 import {
@@ -24,25 +23,64 @@ import {
   PROVIDERS,
   type ProviderId,
 } from "../../../core/setup.ts"
+import { hasOpencodeBinary, installOpencode } from "../../../core/opencode-installer.ts"
 
-type Step = "intro" | "provider" | "apikey" | "saving" | "done" | "error"
+type Step =
+  | "engine_install"
+  | "engine_done"
+  | "intro"
+  | "provider"
+  | "apikey"
+  | "saving"
+  | "done"
+  | "error"
 
 interface SetupScreenProps {
   locale: "zh-Hans" | "en"
   onSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
+  /** After save, kicks off inline boot. Resolves when AI is ready. */
+  onContinue: () => Promise<void>
+  /** Skip key — useful for advanced users who set env vars themselves. */
   onSkip: () => void
 }
 
-export function SetupScreen({ locale, onSave, onSkip }: SetupScreenProps): React.ReactElement {
+export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenProps): React.ReactElement {
   const theme = getTheme()
   const t = STRINGS[locale]
-  const [step, setStep] = useState<Step>("intro")
+  const initialStep: Step = hasOpencodeBinary() ? "intro" : "engine_install"
+  const [step, setStep] = useState<Step>(initialStep)
   const [providerIdx, setProviderIdx] = useState(0)
   const [apiKey, setApiKey] = useState("")
   const [errorMsg, setErrorMsg] = useState("")
+  const [engineLog, setEngineLog] = useState<string[]>([])
+  const [engineRunning, setEngineRunning] = useState(false)
+
+  // Auto-trigger engine install once on first render.
+  useEffect(() => {
+    if (initialStep === "engine_install" && !engineRunning) {
+      setEngineRunning(true)
+      void installOpencode((line) => {
+        setEngineLog((prev) => {
+          const next = [...prev, line]
+          return next.length > 8 ? next.slice(next.length - 8) : next
+        })
+      }).then((result) => {
+        setEngineRunning(false)
+        if (result.ok) {
+          setStep("engine_done")
+        } else {
+          setErrorMsg(result.error ?? "engine install failed")
+          setStep("error")
+        }
+      })
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useInput((input, key) => {
-    if (step === "intro") {
+    if (step === "engine_done") {
+      if (key.return) setStep("intro")
+    } else if (step === "intro") {
       if (key.return) setStep("provider")
       else if (input === "s" || input === "S") onSkip()
     } else if (step === "provider") {
@@ -51,14 +89,76 @@ export function SetupScreen({ locale, onSave, onSkip }: SetupScreenProps): React
       else if (key.return) setStep("apikey")
       else if (key.escape) setStep("intro")
     } else if (step === "done") {
-      if (key.return) onSkip() // continue to startup
+      if (key.return) {
+        // Inline boot — no exit.
+        void onContinue()
+      }
     } else if (step === "error") {
-      if (key.return) setStep("apikey")
+      if (key.return) {
+        // From any failure step, retry from apikey unless engine failed
+        setStep(engineLog.length > 0 && !hasOpencodeBinary() ? "engine_install" : "apikey")
+        if (engineLog.length > 0 && !hasOpencodeBinary()) {
+          // Restart engine install
+          setEngineLog([])
+          setEngineRunning(true)
+          void installOpencode((line) => {
+            setEngineLog((prev) => {
+              const next = [...prev, line]
+              return next.length > 8 ? next.slice(next.length - 8) : next
+            })
+          }).then((result) => {
+            setEngineRunning(false)
+            if (result.ok) setStep("engine_done")
+            else {
+              setErrorMsg(result.error ?? "engine install failed")
+              setStep("error")
+            }
+          })
+        }
+      }
     }
   })
 
   const provider = PROVIDERS[providerIdx]!
   const providerObj = findProvider(provider.id)
+
+  if (step === "engine_install") {
+    return (
+      <Box flexDirection="column" alignItems="center" paddingY={1}>
+        <KidsLogo />
+        <Box marginTop={2} borderStyle="round" borderColor={theme.accent} paddingX={2} paddingY={1} flexDirection="column">
+          <Box>
+            <Text color={theme.accent}>{engineRunning ? <Spinner type="dots" /> : "  "}</Text>
+            <Text color={theme.accent} bold> {t.engineInstalling}</Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color={theme.fgDim}>{t.engineHint}</Text>
+          </Box>
+          {engineLog.length > 0 && (
+            <Box marginTop={1} flexDirection="column">
+              {engineLog.map((line, i) => (
+                <Text key={i} color={theme.fgDim} dimColor>  {line}</Text>
+              ))}
+            </Box>
+          )}
+        </Box>
+      </Box>
+    )
+  }
+
+  if (step === "engine_done") {
+    return (
+      <Box flexDirection="column" alignItems="center" paddingY={1}>
+        <KidsLogo />
+        <Box marginTop={2} borderStyle="round" borderColor={theme.success} paddingX={2} paddingY={1}>
+          <Text color={theme.success} bold>{t.engineDone}</Text>
+        </Box>
+        <Box marginTop={1}>
+          <Text color={theme.accent}>{t.continueHint}</Text>
+        </Box>
+      </Box>
+    )
+  }
 
   if (step === "intro") {
     return (
@@ -150,7 +250,10 @@ export function SetupScreen({ locale, onSave, onSkip }: SetupScreenProps): React
   if (step === "saving") {
     return (
       <Box paddingY={1} paddingX={2}>
-        <Text color={theme.accent}>{t.saving}</Text>
+        <Text color={theme.accent}>
+          <Spinner type="dots" />
+        </Text>
+        <Text color={theme.accent}> {t.saving}</Text>
       </Box>
     )
   }
@@ -188,6 +291,10 @@ export function SetupScreen({ locale, onSave, onSkip }: SetupScreenProps): React
 
 const STRINGS = {
   "zh-Hans": {
+    engineInstalling: "正在安装 AI 引擎…",
+    engineHint: "从 opencode.ai 下载（大约 30 秒）。卡住的话按 Enter 重试。",
+    engineDone: "✓ AI 引擎安装完成",
+    continueHint: "[Enter] 下一步",
     introTitle: "👋  这一步需要家长帮忙",
     introLine1: "AI 老师要用一个 \"API key\" 才能工作 —— 就像给它一把钥匙。",
     introLine2: "家长打开账号给 AI 服务（Anthropic / OpenAI 等），拿到 key 粘进来就行。",
@@ -205,10 +312,14 @@ const STRINGS = {
     errTitle: "出了点问题",
     errRetry: "[Enter] 再试",
     doneTitle: "🎉  搞定！家长任务完成。",
-    doneNext: "你可以让孩子继续了。下一屏是启动屏。",
-    doneHint: "[Enter] 开始",
+    doneNext: "马上启动，让孩子继续。",
+    doneHint: "[Enter] 启动",
   },
   en: {
+    engineInstalling: "Setting up the AI engine…",
+    engineHint: "Downloading from opencode.ai (about 30 seconds). Stuck? Press Enter to retry.",
+    engineDone: "✓ AI engine ready",
+    continueHint: "[Enter] Next",
     introTitle: "👋  Grown-up help needed for this part",
     introLine1: "The AI teacher needs an \"API key\" to work — think of it as a password.",
     introLine2: "A parent opens an account with an AI service (Anthropic / OpenAI), copies the key, pastes it here.",
@@ -226,7 +337,7 @@ const STRINGS = {
     errTitle: "Something went wrong",
     errRetry: "[Enter] Try again",
     doneTitle: "🎉  All set! Grown-up step done.",
-    doneNext: "You can hand it back to the kid now. Next screen is the welcome.",
+    doneNext: "Starting up now.",
     doneHint: "[Enter] Start",
   },
 } as const
