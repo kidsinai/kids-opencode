@@ -8,9 +8,20 @@
  */
 
 export type Screen =
-  | { kind: "loading" }
+  | { kind: "loading"; message?: string }
   | { kind: "startup" }
   | { kind: "mission" }
+  | { kind: "help" }
+  | { kind: "course_picker" }
+  | {
+      kind: "mission_complete"
+      missionId: string
+      missionTitle: string | null
+      passed: number
+      total: number
+      completionMessage: string
+      hasNextMission: boolean
+    }
   | { kind: "error"; variant: ErrorVariant; detail?: string }
 
 export type ErrorVariant =
@@ -36,11 +47,18 @@ export interface PendingPermission {
   /** Free-form text the kid sees ("AI 想要读取 index.html") */
   summary: string
   metadata: Record<string, unknown>
+  /** Plugin-reported predicted Stars cost for this tool call. */
+  starsEstimated?: number
 }
 
 export interface DangerousTopic {
   category: "self_harm" | "violence" | "adult" | "other"
   snippet: string
+}
+
+export interface ToastState {
+  kind: "info" | "warn" | "success"
+  text: string
 }
 
 export interface KidsClientState {
@@ -55,6 +73,14 @@ export interface KidsClientState {
   /** Set when wrapper passed --course or KIDS_COURSE_PACK. */
   coursePack: string | null
   mission: string | null
+  /** Resolved from CoursePack metadata. null in free-play. */
+  packTitle: string | null
+  missionTitle: string | null
+  /** 1-based current mission index within pack.missions; null in free-play. */
+  missionIndex: number | null
+  missionTotal: number | null
+  /** Transient toast (auto-dismisses after a few seconds in the orchestrator). */
+  toast: ToastState | null
   /** Plugin emitted audit events kept for parent dashboard sync (capped). */
   auditBuffer: unknown[]
 }
@@ -72,6 +98,11 @@ const INITIAL: KidsClientState = {
   thinking: false,
   coursePack: null,
   mission: null,
+  packTitle: null,
+  missionTitle: null,
+  missionIndex: null,
+  missionTotal: null,
+  toast: null,
   auditBuffer: [],
 }
 

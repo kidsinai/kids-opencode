@@ -27,7 +27,14 @@
 
 import type { Plugin, Hooks } from "@opencode-ai/plugin"
 import { buildSystemPrompt, type SystemPromptContext } from "./system-prompt.js"
-import { buildOverlay, findMission, loadCoursePack, type CoursePack } from "./course-pack.js"
+import {
+  buildOverlay,
+  bundledCoursePacksDir,
+  findMission,
+  loadCoursePack,
+  type CoursePack,
+  type CoursePackMission,
+} from "./course-pack.js"
 
 const ALLOWED_TOOLS = new Set([
   "read",
@@ -218,5 +225,10 @@ const plugin: Plugin = async (_input, _options) => {
 export const server = plugin
 
 // Convenience re-exports for testing / programmatic use.
-export { buildSystemPrompt, loadCoursePack, buildOverlay, findMission }
-export type { SystemPromptContext, CoursePack }
+// Consumed by @kidsinai/kids-client to render Course Pack metadata and to
+// run mission acceptance checks from inside the TUI (Phase 2.5 "In-TUI
+// mission check command").
+export { buildSystemPrompt, loadCoursePack, buildOverlay, findMission, bundledCoursePacksDir }
+export { runMissionChecks, loadAcceptanceForMission } from "./acceptance.ts"
+export type { SystemPromptContext, CoursePack, CoursePackMission }
+export type { MissionResult, CheckResult, AcceptanceCheck } from "./acceptance.ts"

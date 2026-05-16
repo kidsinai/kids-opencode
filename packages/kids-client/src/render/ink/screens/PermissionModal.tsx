@@ -42,6 +42,11 @@ export function PermissionModal({ permission, locale, onAllow, onDeny, onEdit }:
           <Text color={theme.fgDim}>tool: {permission.tool}</Text>
         </Box>
       )}
+      {permission.starsEstimated && permission.starsEstimated > 0 && (
+        <Box marginTop={1}>
+          <Text color={theme.stars}>{t.starsCost(permission.starsEstimated)}</Text>
+        </Box>
+      )}
       <Box marginTop={1}>
         <Text color={theme.accent}>[y]</Text>
         <Text color={theme.fg}> {t.yes}    </Text>
@@ -60,11 +65,13 @@ const STRINGS = {
     yes: "可以做",
     no: "不要",
     edit: "我来改",
+    starsCost: (n: number) => `预估消耗 ${n}⭐`,
   },
   en: {
     title: "The AI wants to do this",
     yes: "Go ahead",
     no: "Stop",
     edit: "I'll do it",
+    starsCost: (n: number) => `Estimated cost: ${n}⭐`,
   },
 } as const
