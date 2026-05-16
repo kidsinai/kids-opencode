@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@kidsinai/kids-client",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "type": "module",
   "description": "Own-client TUI for Kids OpenCode — talks to local `opencode serve` via @opencode-ai/sdk v2 with kid-warm rendering, mission progress, permission dialog, and stderr-tail audit pipeline.",
   "license": "MIT",
@@ -34,7 +34,7 @@
     "ink-spinner": "^5.0.0",
     "ink-text-input": "^6.0.0",
     "react": "^18.3.1",
-    "@kidsinai/kids-opencode-plugin": "workspace:*"
+    "@kidsinai/kids-opencode-plugin": "^0.0.1"
   },
   "devDependencies": {
     "@opencode-ai/sdk": "^1.14.51",
