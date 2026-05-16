@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@kidsinai/kids-client",
+  "version": "0.0.1",
+  "type": "module",
+  "description": "Own-client TUI for Kids OpenCode — talks to local `opencode serve` via @opencode-ai/sdk v2 with kid-warm rendering, mission progress, permission dialog, and stderr-tail audit pipeline.",
+  "license": "MIT",
+  "homepage": "https://github.com/kidsinai/kids-opencode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kidsinai/kids-opencode.git",
+    "directory": "packages/kids-client"
+  },
+  "keywords": ["opencode", "kids", "tui", "ink", "education", "k-12", "agentic"],
+  "bin": {
+    "kids-client": "./bin/kids-client"
+  },
+  "exports": {
+    ".": {
+      "import": "./src/index.tsx",
+      "types": "./src/index.tsx"
+    }
+  },
+  "files": ["src", "bin", "README.md", "LICENSE"],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "bun test"
+  },
+  "peerDependencies": {
+    "@opencode-ai/sdk": ">=1.14.0"
+  },
+  "dependencies": {
+    "ink": "^5.0.1",
+    "ink-spinner": "^5.0.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1",
+    "@kidsinai/kids-opencode-plugin": "workspace:*"
+  },
+  "devDependencies": {
+    "@opencode-ai/sdk": "^1.14.51",
+    "@types/react": "^18.3.12",
+    "ink-testing-library": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}

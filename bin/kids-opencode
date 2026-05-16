@@ -1,18 +1,22 @@
 #!/usr/bin/env sh
 #
-# kids-opencode — kid-safe wrapper around `opencode`.
+# kids-opencode — kid-safe wrapper that launches the own-client TUI.
 #
-# After `curl -fsSL https://airbotix.ai/install/kids | sh` (or manual install),
-# this script ends up in the user's PATH. It:
-#   1. Prints an AI-disclosure banner once per session.
-#   2. Translates Kids-OpenCode-specific flags (--course, --mission) into env
-#      vars consumed by @kidsinai/kids-opencode-plugin.
-#   3. Dispatches `kids-opencode check <mission>` to the acceptance runner.
-#   4. Otherwise exec's `opencode` with our bundled kid-safe config preloaded.
+# Phase 2.5 architecture (per docs/v2-api-verification.md Q3, resolved 2026-05-16):
+# the `kids-client` binary owns the `opencode serve` subprocess and tails its
+# stderr for plugin audit events. This wrapper's job shrinks to:
+#   1. Print an AI-disclosure banner once per session.
+#   2. Translate Kids-OpenCode-specific flags (--course, --mission) into env
+#      vars consumed by both the plugin AND kids-client.
+#   3. Dispatch `kids-opencode check <mission>` to the acceptance runner.
+#   4. Dispatch `kids-opencode --shutdown` to kill any leftover serve.
+#   5. Load OPENCODE_SERVER_PASSWORD from disk.
+#   6. exec kids-client; client spawns + supervises `opencode serve`.
 #
 # All kid-safety enforcement (system prompt, tool whitelist, webfetch
 # allowlist, audit emit) lives in:
-#   - @kidsinai/kids-opencode-plugin (npm)
+#   - @kidsinai/kids-opencode-plugin (npm, loaded by opencode serve)
+#   - @kidsinai/kids-client (npm, renders the kid-warm TUI)
 #   - $KIDS_OPENCODE_CONFIG (default: ~/.config/kids-opencode/opencode.json)
 #
 # Override the config location:
@@ -47,6 +51,25 @@ case "${1:-}" in
     fi
     exec bun "$PLUGIN_DIR/src/check-runner.ts" "$@"
     ;;
+  --shutdown)
+    # Stop any running `opencode serve` at 127.0.0.1:4096 started by a previous
+    # kids-client session. Best-effort: we don't track PIDs on disk for V0 MVP
+    # (client owns its child); this is a safety hatch for dev / dogfood.
+    if command -v lsof >/dev/null 2>&1; then
+      pids="$(lsof -ti tcp:4096 2>/dev/null || true)"
+      if [ -n "$pids" ]; then
+        echo "kids-opencode: stopping serve on :4096 (pids: $pids)" >&2
+        # shellcheck disable=SC2086
+        kill $pids 2>/dev/null || true
+      else
+        echo "kids-opencode: no serve running on :4096" >&2
+      fi
+    else
+      echo "kids-opencode: 'lsof' not found; cannot stop serve programmatically." >&2
+      echo "Run 'ps aux | grep opencode' and kill the serve PID manually." >&2
+    fi
+    exit 0
+    ;;
   --version|-v)
     echo "kids-opencode $KIDS_OPENCODE_VERSION"
     # Also show underlying opencode version
@@ -68,6 +91,7 @@ USAGE
   kids-opencode --course <pack> --mission <id>
                                    Start at a specific Mission
   kids-opencode check <mission>    Check if you finished a Mission
+  kids-opencode --shutdown         Stop the background AI server
   kids-opencode --version          Show version
   kids-opencode --kids-help        Show this help (in plain language for kids)
 
@@ -148,6 +172,31 @@ if ! command -v opencode >/dev/null 2>&1; then
   exit 1
 fi
 
+# kids-client is the own-client TUI (Phase 2.5). When linked via
+# `bun link --cwd packages/kids-client` in dogfood, it lands on PATH.
+# When installed via the eventual `@kidsinai/kids-client` npm package,
+# the `bin` entry in its package.json drops it on PATH too.
+if ! command -v kids-client >/dev/null 2>&1; then
+  # Fallback for in-repo dev: look next to this script.
+  THIS_DIR="$(cd "$(dirname "$0")" && pwd)"
+  REPO_CLIENT_BIN="$THIS_DIR/../packages/kids-client/bin/kids-client"
+  if [ -x "$REPO_CLIENT_BIN" ]; then
+    KIDS_CLIENT_BIN="$REPO_CLIENT_BIN"
+  else
+    echo "kids-opencode: 'kids-client' binary not found on PATH." >&2
+    echo "" >&2
+    echo "If you're developing in the kids-opencode repo, run:" >&2
+    echo "  bun link --cwd packages/kids-client" >&2
+    echo "" >&2
+    echo "Otherwise reinstall:" >&2
+    echo "  curl -fsSL https://airbotix.ai/install/kids | sh" >&2
+    exit 1
+  fi
+else
+  KIDS_CLIENT_BIN="$(command -v kids-client)"
+fi
+export KIDS_OPENCODE_CONFIG
+
 # ────────────────────────────────────────────────────────────────────────────
 # AI-disclosure banner (compliance: every session must disclose AI use)
 # Suppressed if KIDS_OPENCODE_NO_BANNER=1 (used in CI / testing).
@@ -188,8 +237,20 @@ else
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
-# Forward to opencode with our config
+# Hand off to kids-client. The client will:
+#   1. probe http://127.0.0.1:4096/app
+#   2. if down, spawn `opencode serve` as its child with our env
+#   3. poll until ready, then render the kid-warm TUI
+#   4. on its own exit, kill the serve child (V0 MVP scope)
 # ────────────────────────────────────────────────────────────────────────────
 
+# Make the config path visible to the client (it doesn't take --config; it
+# reads $KIDS_OPENCODE_CONFIG and forwards it to opencode serve).
+export KIDS_OPENCODE_CONFIG="$CONFIG"
+
+# Provide the opencode binary path so client doesn't have to re-resolve.
+OPENCODE_BIN="$(command -v opencode)"
+export OPENCODE_BIN
+
 # shellcheck disable=SC2086 # we want word-splitting on FORWARD_ARGS
-exec opencode --config "$CONFIG" $FORWARD_ARGS
+exec "$KIDS_CLIENT_BIN" $FORWARD_ARGS
