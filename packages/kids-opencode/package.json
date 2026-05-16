@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "@kidsinai/kids-opencode",
+  "version": "0.0.2",
+  "type": "module",
+  "description": "Kids OpenCode — a kid-safe AI coding mentor (12+). One-command install via `bun add -g @kidsinai/kids-opencode`.",
+  "license": "MIT",
+  "homepage": "https://github.com/kidsinai/kids-opencode",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kidsinai/kids-opencode.git",
+    "directory": "packages/kids-opencode"
+  },
+  "keywords": [
+    "kids",
+    "education",
+    "k-12",
+    "ai",
+    "coding",
+    "agentic",
+    "opencode",
+    "airbotix"
+  ],
+  "bin": {
+    "kids-opencode": "./bin/kids-opencode"
+  },
+  "scripts": {
+    "postinstall": "sh ./scripts/postinstall.sh || true",
+    "test": "sh -n bin/kids-opencode && sh -n scripts/postinstall.sh"
+  },
+  "files": [
+    "bin",
+    "scripts",
+    "config",
+    "README.md",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "@kidsinai/kids-client": "0.0.1",
+    "@kidsinai/kids-opencode-plugin": "0.0.1",
+    "@kidsinai/kids-opencode-tui-plugin": "0.0.1"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}

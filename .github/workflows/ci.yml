@@ -42,14 +42,20 @@ jobs:
       - name: Shell-script lint (shellcheck)
         run: |
           sudo apt-get install -y shellcheck
-          # Wrapper + installer must lint clean. We don't gate on every warning
-          # but errors fail the run.
-          shellcheck -S error bin/kids-opencode install.sh
+          # Wrapper + installer + postinstall must lint clean. We don't gate
+          # on every warning but errors fail the run.
+          shellcheck -S error \
+            bin/kids-opencode \
+            install.sh \
+            packages/kids-opencode/bin/kids-opencode \
+            packages/kids-opencode/scripts/postinstall.sh
 
       - name: Shell-script syntax check
         run: |
           sh -n install.sh
           sh -n bin/kids-opencode
+          sh -n packages/kids-opencode/bin/kids-opencode
+          sh -n packages/kids-opencode/scripts/postinstall.sh
 
       - name: TypeScript typecheck (all workspaces)
         run: bun --filter '*' typecheck
