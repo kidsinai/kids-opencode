@@ -68,7 +68,7 @@ require_cmd curl
 
 say "installing v$KIDS_VERSION"
 
-# ─── 1. opencode upstream ─────────────────────────────────────────────────
+# ─── 1. runtime dependencies (opencode + bun) ────────────────────────────
 if ! command -v opencode >/dev/null 2>&1; then
   say "opencode CLI not found; installing via upstream installer…"
   curl -fsSL https://opencode.ai/install | sh
@@ -78,13 +78,54 @@ if ! command -v opencode >/dev/null 2>&1; then
 fi
 say "opencode found at $(command -v opencode)"
 
+# `bun` is required by the `kids-opencode check <mission>` acceptance runner.
+# Auto-install rather than fail at first `check` invocation.
+if ! command -v bun >/dev/null 2>&1; then
+  say "bun runtime not found (required by 'kids-opencode check'); installing via upstream installer…"
+  curl -fsSL https://bun.sh/install | bash
+  # The bun installer drops the binary at ~/.bun/bin/bun but does not modify
+  # the current shell's PATH. Make it usable for the rest of this script.
+  if ! command -v bun >/dev/null 2>&1 && [ -x "$HOME/.bun/bin/bun" ]; then
+    export PATH="$HOME/.bun/bin:$PATH"
+  fi
+  if ! command -v bun >/dev/null 2>&1; then
+    say "ℹ️  bun installed but not yet on PATH in this shell. Open a new shell or run: source ~/.bashrc"
+  fi
+fi
+if command -v bun >/dev/null 2>&1; then
+  say "bun found at $(command -v bun)"
+fi
+
 # ─── 2. kids-safe plugin ──────────────────────────────────────────────────
 say "installing $PLUGIN_PACKAGE via opencode plugin manager…"
 opencode plugin install "$PLUGIN_PACKAGE" || \
   fail "could not install plugin $PLUGIN_PACKAGE. See https://airbotix.ai/help/install for help."
 
-# ─── 3. config ────────────────────────────────────────────────────────────
+# ─── 3. config + server-password ─────────────────────────────────────────
 mkdir -p "$CONFIG_DIR"
+# 700: holds the random server-password and (after `kids-opencode register`)
+# the encrypted DeepRouter API key. Defence-in-depth on shared school laptops.
+chmod 700 "$CONFIG_DIR"
+
+# Generate a random Basic-Auth password for `opencode serve`. The wrapper
+# reads this file and exports OPENCODE_SERVER_PASSWORD before launching
+# opencode. Without this, serve binds 127.0.0.1:4096 unauthenticated and any
+# other local process can drive the agent, read kid files, and bill LLM
+# calls against the family wallet. Idempotent: existing password preserved.
+PASSWORD_FILE="$CONFIG_DIR/server-password"
+if [ ! -f "$PASSWORD_FILE" ]; then
+  if command -v openssl >/dev/null 2>&1; then
+    openssl rand -base64 32 > "$PASSWORD_FILE"
+  elif [ -r /dev/urandom ]; then
+    # Fallback for minimal Linux containers without openssl.
+    head -c 32 /dev/urandom | base64 > "$PASSWORD_FILE"
+  else
+    fail "no openssl and no /dev/urandom; cannot generate server password."
+  fi
+  chmod 600 "$PASSWORD_FILE"
+  say "generated random server-password at $PASSWORD_FILE"
+fi
+
 if [ -f "$CONFIG_DIR/opencode.json" ]; then
   say "config already exists at $CONFIG_DIR/opencode.json — not overwriting"
 else

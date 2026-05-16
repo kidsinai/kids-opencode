@@ -41,7 +41,7 @@
 | 3 | Data governance — quality, provenance, security | 🟢 | CLI keeps kid code on the family device. Audit log: stderr (V0) → platform-backend persistence (Phase 5). DeepRouter request log retained 90d hot / 3y cold encrypted. |
 | 4 | Test AI models / systems for safety / performance | 🟡 | 50-prompt red-team set at `docs/red-team.md` (created 2026-05-15). Acceptance: ≥48/50 prompts safely refused or redirected before V0 launch. Currently 0/50 executed; runs scheduled in Phase 4. |
 | 5 | Human control / intervention (oversight) | 🟢 | `opencode` `permission.default: "ask"` enforces approval per tool call; system prompt rule #3 requires verbal announcement; parent audit log surfaces every action. |
-| 6 | Inform end-users about AI use | 🟢 | System prompt rule #5: "Never pretend to be human." Terminal banner on startup (planned). AI disclosure visible in airbotix.ai marketing. |
+| 6 | Inform end-users about AI use | 🟢 | System prompt rule #5: "Never pretend to be human." Terminal banner on startup (implemented in `bin/kids-opencode` 2026-05-16). AI disclosure visible in airbotix.ai marketing. |
 | 7 | Establish challenge processes for affected people | 🟡 | Parent dashboard takedown flow planned in `Airbotix-AI/airbotix-app` (PLAN Phase 5). Email channel `privacy@airbotix.ai` documented in draft compliance statement. |
 | 8 | Transparency across AI supply chain | 🟢 | DeepRouter is documented as our sole egress; provider list (Anthropic / OpenAI / Doubao / DeepSeek) is documented; per-tenant kids_mode flag forwards safety constraints to upstream providers. |
 | 9 | Records to allow third-party compliance assessment | 🟢 | System prompts are git-tagged in `packages/kids-plugin/src/system-prompt.ts`; audit log retention 90d hot / 3y cold (per master compliance doc §6); this directory is the documented evidence chain. |
@@ -89,6 +89,9 @@ Legend: 🟢 implemented · 🟡 in progress / documented · 🔴 not started
 | R-16 | Statutory privacy tort claim from a breached family | Low | High | (a) Data minimisation; (b) NDB runbook (`docs/runbook/ndb-incident.md`); (c) cyber liability insurance; (d) ToS limitation clauses (lawyer drafted) | Lightman | 🟡 see AU-6 |
 | R-17 | eSafety transparency notice arrives demanding 30-day response | Low (V0) → Medium (V1) | Medium | Pre-drafted answer skeleton in `docs/compliance/au.md` §6; sole-or-primary-purpose statement on file (`au-sole-or-primary-purpose-statement.md`); audit trail accessible | Lightman | 🟢 prep done |
 | R-18 | OAIC investigation under new COPC | Low (V0) | High | (a) OAIC consultation submission filed; (b) compliance map per Code section once final wording lands; (c) continuous engagement | Lightman | 🟢 submission drafted |
+| R-19 | Unauthenticated localhost agent takeover — any local process can drive opencode's `127.0.0.1:4096` if `OPENCODE_SERVER_PASSWORD` is unset, reading kid project files / billing LLM calls / extracting prompts | Medium (multi-user laptops, shared school devices) | High | `install.sh` generates random 32-byte server-password via `openssl rand -base64 32` to `~/.config/kids-opencode/server-password` (chmod 600), config dir is chmod 700; `bin/kids-opencode` wrapper reads it and exports the env var before exec'ing opencode; fails loudly if password file missing | Team B + installer | 🟢 implemented (2026-05-16) |
+| R-20 | v2 SDK migration breaking our plugin mid-V0 | Low (verified Q1 — no v2 plugin variant exists) | Medium | Plugin imports unified `@opencode-ai/plugin` `Hooks` interface; verified in `docs/v2-api-verification.md` §Q1. Upstream-bump gauntlet (PLAN §"Upstream sync policy") includes hook-existence checks as the last gate | Team B | 🟢 verified |
+| R-21 | Upstream `opencode` introduces breaking change between releases (~21 versions/day published per npm view) | Medium | Medium | Exact version pin in `install.sh` for the (sdk, plugin, binary) triple; 2-weekly evaluation cadence; 15-check upgrade gauntlet must pass before merge; SBOM published per release for downstream reproducibility | Team B | 🟡 gauntlet workflow not yet wired |
 
 ---
 
@@ -154,4 +157,5 @@ Calendar entry for next review: **2026-08-15**.
 
 | Version | Date | Note |
 |---|---|---|
+| 0.2 | 2026-05-16 | Added R-19 (unauthenticated `127.0.0.1:4096` takeover, mitigated by random server-password + chmod 700 config dir), R-20 (v2 SDK migration risk — neutralised by Q1 verification: no v2 plugin variant), R-21 (upstream version churn — partially mitigated by exact-pin policy; gauntlet workflow still TODO). Guardrail #6 (AI disclosure) banner moved from 🟡 "planned" to 🟢 "implemented" per `bin/kids-opencode` 2026-05-16 changes. |
 | 0.1 | 2026-05-15 | Initial assessment instantiating the AU-7 template. Pre-V0 baseline. 5/10 guardrails 🟢, 5/10 🟡, 0/10 🔴. |

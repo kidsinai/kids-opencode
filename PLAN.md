@@ -1,6 +1,11 @@
 # Kids OpenCode — Development Plan (V0 → Workshop dogfood)
 
-> **Status**: v0.3 living plan · CLI-first pivot · Updated 2026-05-15 (post G1-G12 engineering closeout)
+> **Status**: v0.4 living plan · CLI-first + client-architecture-aware · Updated 2026-05-16 (post Q1/Q2 verification + airbotix-session PRD intake)
+>
+> Companion docs:
+> - `docs/client-architecture-handoff.md` — cross-session handoff brief
+> - `docs/v2-api-verification.md` — Q1/Q2 verification report (Q3 deferred to Phase 2.5)
+> - `~/Documents/sites/airbotix/docs/product/prd/kids-opencode-client-prd.md` — canonical client/architecture PRD (D-CL1..D-CL11)
 > **Owner**: Joe (CTO) + 1 TS engineer (TBH)
 > **Goal**: A kid-safe `kids-opencode` CLI installable via `curl ... | sh`, that lets a kid 12+ build a real HTML/CSS/JS project in a guided way, with all LLM traffic routed through DeepRouter and all tool use audited.
 > **Cross-doc links**:
@@ -67,6 +72,7 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 - [x] `bin/kids-opencode` — shell wrapper exec'ing `opencode --config $HOME/.config/kids-opencode/opencode.json`
 - [x] `install.sh` — installs opencode upstream if missing → `opencode plugin install @kidsinai/kids-opencode-plugin` → drops config → installs wrapper
 - [x] Smoke-test: `sh -n install.sh` ✅, `sh -n bin/kids-opencode` ✅, plugin typecheck ✅, plugin module loads ✅
+- [x] **Security baseline** (2026-05-16, airbotix session): `install.sh` auto-installs `bun` if missing; generates random `OPENCODE_SERVER_PASSWORD` (chmod 600) at `~/.config/kids-opencode/server-password`; sets `chmod 700` on config dir; `bin/kids-opencode` reads + exports the password before exec'ing opencode. Closes the unauthenticated 127.0.0.1:4096 attack surface.
 - [ ] Publish `@kidsinai/kids-opencode-plugin@0.0.1` to npm registry under the `@kidsinai` scope — **blocked on npm scope auth (Lightman)**
 - [ ] Stand up `airbotix.ai/install/kids` to serve `install.sh` — **`Airbotix-AI/airbotix` repo's job (other AI session)**
 - [ ] End-to-end live run: a fresh macOS shell user runs the curl command and `kids-opencode` boots and completes one round-trip — **blocked on provider key handover (Lightman)**
@@ -108,7 +114,75 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 
 ---
 
-## Phase 4 — Red team + first lawyer review (W7-8)
+## Phase 2.4 — TUI plugin skin (A route, before Workshop #1) — W7
+
+> Inserted v0.4. Source: client-PRD §9.2 + D-CL2 + D-CL11. Unblocked by `docs/v2-api-verification.md` Q1 finding (no v1→v2 plugin migration required; we just add a new sibling package using `@opencode-ai/plugin/tui`).
+
+**Goal**: kid sees an Airbotix Kids OpenCode experience — kid-warm theme, branded logo, mission progress in the sidebar, kid-friendly placeholders + status text, simplified keymap — instead of the raw upstream developer TUI. Ships in time for Workshop #1 so the first kid cohort doesn't see "another senior-dev terminal."
+
+### Tasks
+- [ ] Create `packages/kids-opencode-tui-plugin/` (a sibling npm package — `@opencode-ai/plugin` exports `PluginModule` and `TuiPluginModule` as mutually-exclusive types, so the existing server-side plugin cannot also be the TUI plugin)
+- [ ] Import the TUI plugin API from `@opencode-ai/plugin/tui` (subpath confirmed via `packages/plugin/package.json` exports map at the kernel)
+- [ ] Register kids-warm theme via `api.theme.install()` + default `api.theme.set("kids-warm")`. WCAG AA contrast; optional high-contrast variant for vision needs
+- [ ] Replace `home_logo` slot with the Airbotix Kids OpenCode wordmark
+- [ ] Replace `home_prompt` placeholder with "想做什么？告诉我吧（中文/英文都行）"
+- [ ] Register a sidebar slot showing Mission progress whenever `KIDS_COURSE_PACK` env var is present — "Mission 1/3 · ⭐ 36/40"
+- [ ] Register an encourage/notify/error sound pack via `api.attention.soundboard.registerPack`
+- [ ] Register a simplified keymap layer (the `?` help shows only the 6-8 kid-relevant bindings, not the engineer command palette)
+- [ ] Replace upstream "Thinking…" with "AI 老师在想…" (or English equivalent based on locale)
+- [ ] On dangerous-topic refusal from the system prompt, render an overlay modal showing the Kids Helpline 1800 55 1800 reference
+
+### Acceptance
+- [ ] Startup screen no longer shows upstream opencode logo or any dev-tool framing
+- [ ] When invoked via `kids-opencode --course portfolio-site --mission mission-1`, sidebar shows the mission progress line
+- [ ] `?` keymap help lists only the kid-relevant bindings
+- [ ] Plugin loads alongside the existing server-side `@kidsinai/kids-opencode-plugin` in the same opencode process (verified by both `plugin.loaded` audit lines appearing)
+
+### Risks
+- Upstream marks several TUI plugin APIs `experimental` or `@deprecated` (`api.slots.register` in particular). Even if every slot we use is later removed, the theme + keymap + sound + placeholder coverage delivers ~90% of the value, because `api.theme.install` and `keymap.registerLayer` are the stable subset.
+
+### Phase 2.4 NOT-doing
+- Full chat-pane rewrite (slot API doesn't expose it; that's Phase 2.5)
+- Process-model changes (wrapper still just exec's monolithic `opencode`; no separate `opencode serve` child)
+- In-browser preview pane (Phase 7 V1 GUI)
+
+---
+
+## Phase 2.5 — Own-client TUI (C route, after Workshop #1) — W9-11
+
+> Inserted v0.4. Source: client-PRD §9.3 + D-CL1 + D-CL10. Unblocked by `docs/v2-api-verification.md` Q2 finding (serve stdout readiness signal is stable; matches the regex upstream SDK already uses).
+
+**Goal**: own TUI client that talks to `opencode serve` over SDK v2 — full chat rendering, mission UI, permission dialog, audit pipeline, friendly error screens. Reuses Phase 2.4 theme + sound + placeholders + system-prompt overlay; reuses Q1/Q2 verification work.
+
+### Day-1 prerequisites
+- [ ] **Q4 spike** — Bubble Tea (Go) vs Ink (Node + React). 1-day spike each, judged on TUI render quality, dev velocity, and Phase 7 (Tauri) reusability of core logic
+- [ ] **Q3 spike** — verify v2 SDK SSE event subscription works for plugin-emitted audit events (1 hour). If failed, fallback path is stderr-tail sidecar (documented in `docs/v2-api-verification.md` Q3)
+- [ ] D-CL7 (TUI framework) locked
+
+### Tasks
+- [ ] Pick TUI framework (D-CL7) and bootstrap `packages/kids-client/`
+- [ ] Client-core / render-layer split — core is pure state machine + business logic (TS), render layer is per-target (TUI now, web later)
+- [ ] Wrapper auto-spawns `opencode serve` per the readiness-signal pattern documented in `docs/v2-api-verification.md` Q2; tracks child PID; SIGTERM on parent exit
+- [ ] Wrapper detection: if `127.0.0.1:4096/app` already responds, attach to that serve instead of spawning a duplicate
+- [ ] Startup screen (PRD §3.1): welcome within 5 seconds, 4 quick-start key options visible
+- [ ] Mission-in-progress screen (PRD §3.2): progress bar + Stars balance + actor indicator + streaming chat pane
+- [ ] Permission confirmation modal (PRD §3.4): y/n/e three options, wired to upstream permission API
+- [ ] SSE event subscription: reconnect within 5s on disconnect; back-pressure handling
+- [ ] Client-side audit upload pipeline to `Airbotix-AI/platform-backend /api/audit` with retry + local-disk buffer + batch upload
+- [ ] Friendly error screens for 6 failure modes: serve won't start, network down, Stars exhausted, password wrong, config missing, AI hung
+- [ ] First-class non-English locale support (zh-Hans at minimum); locale switching at runtime
+
+### Acceptance
+- [ ] In a clean macOS shell, a single `kids-opencode` invocation runs Phase 2.5 client + serve subprocess; first paint < 3s
+- [ ] Workshop #2 (W13-14) uses Phase 2.5 client end-to-end; ≥18/20 kids finish portfolio Course Pack
+- [ ] Audit pipeline observed delivering events to a mock platform-backend at ≥99% success
+- [ ] No upstream opencode TUI code visible in any kid-facing flow
+
+### Risks
+- Phase 2.5 work crosses Workshop #1 → #2 transition; if Workshop #1 reveals fundamental UX issues, Phase 2.5 design absorbs them, lengthening the cycle. Mitigation: minimal-viable client for Workshop #2 covers only the 3 critical screens (start / mission / permission); polish lands after.
+- Client bug could let a tool execute the plugin would have blocked. Mitigation: plugin remains the server-side hard gate; client bugs cannot bypass plugin. Add own e2e safety tests on the client too.
+
+---
 
 **Goal**: 50-prompt red-team set passes ≥48/50. AU lawyer sees `docs/compliance/au.md` and signs off the eight `AU-*` open items (or returns notes).
 
@@ -138,20 +212,25 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 
 ## Phase 5 — Workshop / Class integration (W9-10)
 
-**Goal**: A workshop teacher can hand kids a class code; the kid CLI authenticates against `Airbotix-AI/platform-backend`, scoped to the workshop credit pool, with the teacher seeing per-kid progress.
+> Rewritten v0.4 per client-PRD §9.5 + D-CL5: Workshop is **not** a central serve serving 20 clients; it is 20 independent local stacks aggregated via audit ingest on the platform-backend side. The pre-warm and concurrency targets shift accordingly.
+
+**Goal**: 20 kids each run their own local `kids-opencode` stack (serve + plugin + client) on their own laptops; the teacher console sees per-kid progress by subscribing to a unified audit event stream on `Airbotix-AI/platform-backend`. The teacher is the audience for the aggregation; nothing on the kids' machines coordinates with anything on other kids' machines.
 
 ### Tasks
-- [ ] `kids-opencode --workshop <class-code>` flag
-- [ ] Workshop mode in the plugin: detect env var, switch DeepRouter tenant to the workshop pool, emit `workshop-mode` audit events
-- [ ] Teacher console (in `Airbotix-AI/airbotix-app` or `Airbotix-AI/teacher-console`) shows per-kid progress in near-real-time from audit events
-- [ ] Pre-warm: ensure DeepRouter handles 20 concurrent kid sessions in the same workshop without 429s
+- [ ] `kids-opencode --workshop <class-code>` flag → wrapper translates to env vars consumed by the plugin (tenant id, credit pool id) and the client (teacher console base URL for live update channel)
+- [ ] Workshop mode in the plugin: detect env, switch DeepRouter tenant key to the workshop pool credentials, tag every audit line with `workshop_class_id` + `kid_id`
+- [ ] Teacher console (`Airbotix-AI/teacher-console`) subscribes to platform-backend `/api/audit/stream?class=<id>` and renders per-kid progress in near-real-time
+- [ ] Concurrency target shifts: **platform-backend audit ingest endpoint** must absorb ~200 events / sec (20 kids × ~10 tool calls/min × peak burst factor), and **DeepRouter** must handle 20 concurrent kid sessions on a workshop-pool tenant without 429s. There is no central serve — local stacks scale independently.
+- [ ] Acceptance test: spin up 20 simulated kid stacks against a local platform-backend + DeepRouter staging; verify teacher console shows all 20 progressing without backend errors
 
 ### Acceptance
-- [ ] Dry-run with 20 simulated workshop sessions: all complete Mission 1 with no plugin / DeepRouter errors
-- [ ] Teacher console shows live progress
+- [ ] 20-stack simulated workshop completes Mission 1 with no platform-backend audit-ingest failures
+- [ ] Teacher console shows live per-kid progress within 5s of each kid's actions
+- [ ] No central-serve component exists in the production design (architectural confirmation)
 
 ### Risks
-- **Coordination across three repos** — this is the first phase that crosses kids-opencode + platform-backend + airbotix-app. Aligning APIs early is critical.
+- **Cross-repo coordination** — kids-opencode + platform-backend + teacher-console must align on the audit event schema. Mitigation: schema published as a TypeScript types package consumed by all three.
+- **Audit ingest as new failure mode** — if platform-backend goes down mid-workshop, kids' stacks keep working but teacher loses visibility. Audit pipeline includes local-disk buffer + retry (see Phase 2.5).
 
 ---
 
@@ -175,6 +254,83 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 ### Risks
 - **One kid finds an unforeseen bypass** — kill-switch ready, post-mortem within 24h.
 - **Venue WiFi** — pre-test, backup hotspot.
+
+---
+
+## Phase 7 — V1 GUI desktop app (Tauri) — not in V0 scope
+
+> Inserted v0.4 as forward-anchor per client-PRD §9.6 + D-CL2. No work starts here until Phase 6 closes and we have parent feedback from Workshops #1 and #2.
+
+**Goal**: a true GUI desktop app for families that prefer a window over a terminal. Reuses Phase 2.5 client-core verbatim; replaces the TUI render layer with Tauri-shell + web-view UI.
+
+### Tasks (V1, not V0)
+- [ ] Tauri shell project bootstrap
+- [ ] Adapt Phase 2.5 client-core to the new render layer (the core/render split made in Phase 2.5 is what makes this possible)
+- [ ] Embedded browser preview pane (impossible in TUI; first-class in Tauri)
+- [ ] System-level notifications + tray icon
+- [ ] In-app self-update with signature verification
+- [ ] Signed distribution: macOS Notarisation + Windows EV cert (Q5 in client-PRD §10; ~$400/year ongoing)
+
+### Pre-requisites before Phase 7 can start
+- Phase 6 (real-workshop dogfood) closed with NPS ≥ 50
+- Q4 + Q5 from client-PRD §10 fully resolved
+- A V1 budget approved (codesigning is the gating cost item)
+
+---
+
+## Upstream sync policy (inserted v0.4)
+
+> Source: client-PRD §8. Codifies our relationship with `anomalyco/opencode` upstream so that any upstream change touching `@opencode-ai/sdk`, `@opencode-ai/plugin`, or `opencode` binary goes through a deterministic gauntlet before reaching kids.
+
+### Why this exists
+
+Per `npm view @opencode-ai/sdk versions --json`: ~7,178 versions published in 11 months (~21/day). Most are `0.0.0-dev-*` rolling snapshots, but minor jumps (1.14.51 → 1.15.0 happened on 2026-05-15) are real. **Semver as labelled does not imply stability for our purposes**; we treat the upstream as a fast-moving dependency and apply our own gauntlet.
+
+### Version pin rules
+
+| Package | Rule | Why |
+|---|---|---|
+| `@opencode-ai/sdk` | Exact version (`"1.14.51"`, never `^1.14.0`) | SDK is the wire-contract for our client |
+| `@opencode-ai/plugin` | Exact version | Hook signature must match serve version |
+| `opencode` binary | Exact version (pinned in `install.sh`) | Serve runtime behaviour |
+
+All three must move **as one set**. A release tag of `kids-opencode` corresponds to a known-good `(sdk, plugin, binary)` triple. Mixed versions are not supported.
+
+### Upgrade gauntlet (10-15 checks before merging any upstream bump)
+
+Run by `.github/workflows/upstream-bump-gauntlet.yml` on every dependabot-style upgrade PR:
+
+1. `opencode serve` boots in < 3 seconds
+2. `@kidsinai/kids-opencode-plugin` loads (`[kids-audit] plugin.loaded` observed)
+3. `session.create` succeeds
+4. `session.prompt` → streaming reply received
+5. AI triggers `read` tool → permission prompt visible via SSE
+6. User denies → tool does not execute
+7. Plugin rejects `shell` tool (whitelist still effective)
+8. Plugin rejects `webfetch` to `example.com` (host allowlist still effective)
+9. Audit events include `stars_estimated` field
+10. `kids-opencode check mission-1` returns exit 0 on a satisfying sample project
+11. AI-disclosure banner prints on wrapper startup
+12. SSE auto-reconnects within 5s of forced disconnect
+13. `session.abort` halts LLM call (no kid billing for cancelled work)
+14. Missing config file → friendly error from wrapper
+15. All hook names used by `@kidsinai/kids-opencode-plugin` still resolve in upstream `@opencode-ai/plugin`
+
+A PR that fails any check is not merged. The gauntlet itself is implemented as a Bun test suite under `packages/kids-plugin/test/gauntlet/` and run in CI via `bun test --filter=gauntlet`.
+
+### Upgrade cadence
+
+- **Routine evaluation**: every 2 weeks, decide whether to bump. Not every week — upstream noise/signal ratio is too high.
+- **Hotfix**: only when upstream patches a kid-safety security issue.
+- **Auto-merge**: never. Dependabot opens PRs; humans decide.
+- **Rollback**: every released `install.sh` pins a complete triple; production rollback is a one-variable change in the next installer release.
+
+### v1 → v2 SDK posture (informed by `docs/v2-api-verification.md`)
+
+- V0.4 server-side plugin **stays** on the unified `@opencode-ai/plugin` `Hooks` interface (no migration required; there is no v1/v2 split for the plugin)
+- V0.4 Phase 2.4 TUI plugin: import from `@opencode-ai/plugin/tui` (real subpath, confirmed)
+- V0.4 Phase 2.5 own-client: build against `@opencode-ai/sdk/v2` (richer resource set: `worktree`, `experimental`, `permission`, `part`, `sync`, `question`)
+- Server-side plugin code never imports `@opencode-ai/sdk` directly (only `@opencode-ai/plugin` types) — keeps our SDK upgrade decoupled from plugin upgrade
 
 ---
 
@@ -266,6 +422,7 @@ Status as of 2026-05-15 (post G1-G12). 🟢 engineering-complete · 🟡 enginee
 
 | Version | Date | Note |
 |---|---|---|
+| 0.4 | 2026-05-16 | **Client-architecture intake.** Absorbed `airbotix/docs/product/prd/kids-opencode-client-prd.md` v0.3 (the airbotix-session PRD). Q1+Q2 verified in `docs/v2-api-verification.md`. New: Phase 2.4 (TUI plugin skin / A route, before Workshop #1), Phase 2.5 (own-client TUI / C route, after Workshop #1), Phase 7 (V1 Tauri GUI, post-V0). Phase 5 Workshop rewritten as "20 independent local stacks aggregated via audit ingest" (no central serve). New "Upstream sync policy" section codifies the version-pin rules + 15-check upgrade gauntlet. Security baseline (chmod 700 config dir, random server-password, bun auto-install, wrapper exports `OPENCODE_SERVER_PASSWORD`) ticked under Phase 2. |
 | 0.3 | 2026-05-15 | **G1-G12 closeout.** Phase 2 + Phase 3 marked engineering-done; Phase 4 mostly engineering-done. CI workflow, 36 plugin tests, acceptance runner, Stars cost estimation, install.sh SHA verification, AI-disclosure banner, --course/--mission flag translation, CHANGELOG/SECURITY/CONTRIBUTING/PR template all landed. Definition-of-V0-Done section rewritten as a 9-row status table. |
 | 0.2 | 2026-05-15 | **CLI-first pivot.** Dropped Phase 3 (Kid Web UI), Phase 4 sandbox-hardening reframed for CLI (no virtual FS / iframe), workshop mode moved to airbotix-app integration. Plugin + wrapper + installer are the deliverable. |
 | 0.1 | 2026-05-12 | Initial plan. Hosted-web V0 with three-column React UI + server virtual FS. |

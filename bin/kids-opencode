@@ -167,6 +167,27 @@ BANNER
 fi
 
 # ────────────────────────────────────────────────────────────────────────────
+# Export OPENCODE_SERVER_PASSWORD before forwarding to opencode. opencode's
+# internal HTTP server binds 127.0.0.1:4096; without this env var it runs
+# unauthenticated, allowing any other local process to drive the agent.
+# Installer generates a random password at $CONFIG_DIR/server-password.
+# ────────────────────────────────────────────────────────────────────────────
+
+PASSWORD_FILE="$(dirname "$CONFIG")/server-password"
+if [ -f "$PASSWORD_FILE" ]; then
+  OPENCODE_SERVER_PASSWORD="$(cat "$PASSWORD_FILE")"
+  export OPENCODE_SERVER_PASSWORD
+else
+  echo "kids-opencode: server-password missing at $PASSWORD_FILE" >&2
+  echo "" >&2
+  echo "This file should have been created by the installer." >&2
+  echo "Re-run the installer to regenerate it:" >&2
+  echo "  curl -fsSL https://airbotix.ai/install/kids | sh" >&2
+  echo "" >&2
+  exit 1
+fi
+
+# ────────────────────────────────────────────────────────────────────────────
 # Forward to opencode with our config
 # ────────────────────────────────────────────────────────────────────────────
 

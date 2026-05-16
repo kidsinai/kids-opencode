@@ -10,26 +10,30 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ### Added
 - CI workflow at `.github/workflows/ci.yml` (typecheck + plugin tests + shell lint on every PR + push)
-- Plugin unit tests at `packages/kids-plugin/test/`
+- Release pipelines: `.github/workflows/publish-plugin.yml` (npm) and `.github/workflows/publish-installer.yml` (S3 + CloudFront + SBOM)
+- Plugin unit tests at `packages/kids-plugin/test/` (36 tests across 4 files)
 - Acceptance check runner: `kids-opencode check <mission>` walks `acceptance.yml` against the kid's project folder and reports pass/fail per check
 - AI-disclosure banner printed by `kids-opencode` on first run per session (compliance artefact)
 - `kids-opencode --course <pack> --mission <id>` flags translated into env vars (`KIDS_COURSE_PACK`, `KIDS_MISSION`, `KIDS_OBJECTIVES`, `KIDS_AGE_BAND`) before exec'ing opencode
+- `kids-opencode --version`, `--kids-help` subcommands
 - Plugin loads bundled `course-packs/<pack>/pack.yml` and prepends `system_prompt_overlay` to the kid-safe system prompt
-- Per-tool Stars cost estimation in plugin audit emit (`stars.estimated` audit line)
+- Per-tool Stars cost estimation in plugin audit emit (`stars_estimated` field on `tool.execute.before`)
 - `install.sh`: SHA-256 verification of the `kids-opencode` wrapper before install
-- Governance: `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`
+- `install.sh`: auto-install `bun` runtime if missing (required by `kids-opencode check`)
+- `docs/v2-api-verification.md` — Q1 + Q2 findings against opencode-kernel; concludes our plugin needs no v1→v2 migration and documents the `opencode serve` stdout readiness signal
+- `docs/client-architecture-handoff.md` — cross-session handoff brief from the airbotix-session client/architecture PRD
+- Governance: `CHANGELOG.md`, `SECURITY.md`, `CONTRIBUTING.md`, `.github/pull_request_template.md`
 
 ### Changed
 - Removed stale `dev` script in root `package.json` (pointed at deleted `packages/kids-web`)
-
-### Fixed
-- (none yet)
-
-### Removed
-- (none yet)
+- Course Pack files moved into `packages/kids-plugin/course-packs/` so they ship with the npm package
+- PLAN.md → v0.4 (adds Phase 2.4 TUI plugin skin, Phase 2.5 own-client TUI, Phase 7 V1 GUI; rewrites Phase 5 Workshop as 20 independent local stacks aggregated via audit ingest, not a central serve)
 
 ### Security
-- `install.sh` now verifies the wrapper's SHA-256 before placing it on PATH
+- **install.sh**: generates a random `OPENCODE_SERVER_PASSWORD` via `openssl rand -base64 32` (with `/dev/urandom` fallback) to `~/.config/kids-opencode/server-password` (chmod 600), idempotent across reinstalls
+- **install.sh**: sets `chmod 700` on `~/.config/kids-opencode/` (config dir, holds password today and the encrypted DeepRouter API key once `kids-opencode register` lands)
+- **bin/kids-opencode**: reads the server-password file and exports `OPENCODE_SERVER_PASSWORD` before exec'ing opencode. Without this, opencode's internal HTTP server binds `127.0.0.1:4096` with **no authentication** — any local process can drive the agent, read kid project files, and bill LLM calls against the family wallet. Fails loudly with reinstall instructions if the password file is missing.
+- **install.sh**: SHA-256 verification of the `kids-opencode` wrapper before placing it on PATH
 
 ---
 

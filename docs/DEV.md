@@ -84,12 +84,19 @@ Expected output: 5/6 pass, 1 skip (audit_log_check needs platform-backend Phase 
 
 ## Run the wrapper script directly
 
-The wrapper assumes a config at `~/.config/kids-opencode/opencode.json`. For local dev:
+The wrapper assumes (a) a config at `~/.config/kids-opencode/opencode.json` AND (b) a server-password file at `~/.config/kids-opencode/server-password`. For local dev:
 
 ```bash
 mkdir -p ~/.config/kids-opencode
+chmod 700 ~/.config/kids-opencode
 cp config/opencode.json.template ~/.config/kids-opencode/opencode.json
+
+# Generate a random server-password (matches what install.sh does in production)
+openssl rand -base64 32 > ~/.config/kids-opencode/server-password
+chmod 600 ~/.config/kids-opencode/server-password
 ```
+
+The server-password closes a real security hole: without it, opencode's internal HTTP server binds `127.0.0.1:4096` with no authentication and any local process can drive the agent / read kid files / bill LLM calls. The wrapper reads the file and exports `OPENCODE_SERVER_PASSWORD` for opencode to pick up.
 
 Edit the config to use your dev provider (Anthropic / OpenAI / DeepRouter staging):
 
@@ -221,6 +228,7 @@ The kernel repo (`kidsinai/opencode-kernel`) has its own release cadence — it 
 - **TypeScript errors in `node_modules`** — usually a Bun cache thing; try `rm -rf node_modules bun.lock && bun install`.
 - **Plugin tests fail with "Cannot find module"** — make sure you ran `bun install` from the repo root (not from `packages/kids-plugin/`).
 - **`kids-opencode` says config not found** — copy `config/opencode.json.template` to `~/.config/kids-opencode/opencode.json` (see "Run the wrapper script directly" above).
+- **`kids-opencode` says `server-password missing`** — `openssl rand -base64 32 > ~/.config/kids-opencode/server-password && chmod 600 ~/.config/kids-opencode/server-password`. Or just re-run `install.sh` which generates it idempotently.
 - **AI-disclosure banner shows up in CI logs and you don't want it** — set `KIDS_OPENCODE_NO_BANNER=1`.
 - **Acceptance runner reports `invalid regex`** — your YAML uses a non-JS regex feature. Use `(?i)` prefix for case-insensitive (handled by our compiler). For other flags, see `compileRegex()` in `packages/kids-plugin/src/acceptance.ts`.
 
