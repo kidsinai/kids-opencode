@@ -215,7 +215,7 @@ D-CL4 (`OPENCODE_SERVER_PASSWORD` required) is also confirmed by the source — 
 | Sprint 2 (v1→v2 plugin migration + TUI plugin for Workshop #1) | 🔴 blocked on Q1 | 🟢 **unblocked** — no migration needed; can go straight to TUI plugin |
 | Sprint 2 (TUI plugin via `@opencode-ai/plugin/tui` subpath) | 🟡 contract unverified | 🟢 same Hooks contract; plus `@opencode-ai/plugin/tui` exports OpenTUI primitives (`packages/plugin/src/tui.ts`) — see follow-up read |
 | Sprint 3+ (Phase 2.5 own-client) | 🔴 blocked on Q1, Q2 | 🟢 **unblocked** — SDK v2 client API ready; serve readiness mechanism documented |
-| Sprint 3+ (audit pipeline via SSE) | 🟡 blocked on Q3 | 🟡 still blocked but with documented fallback (stderr-tail sidecar) |
+| Sprint 3+ (audit pipeline via SSE) | 🟡 blocked on Q3 | ✅ **resolved** (2026-05-16, see Q3 section below): plugin cannot publish custom bus events through public API; Path B (stderr tail) is the chosen pipeline |
 
 ---
 
@@ -239,8 +239,41 @@ Suggested changes informed by this verification:
 
 ---
 
+## Q3 — Can plugin publish custom events that reach client via SSE? (resolved 2026-05-16, airbotix session Phase 2.5 day-0 spike)
+
+**Question (PRD §10 Q3 / client-prd §5.4):** plugin emits audit lines (`[kids-audit] {...}` on stderr) today. Phase 2.5 client design assumes the SSE event stream (`client.global.event()`) can carry plugin audit. Can the plugin push a custom event onto opencode's internal Bus so it surfaces through SSE — without forking the kernel?
+
+**Investigation:**
+
+| Check | File:line | Result |
+|---|---|---|
+| Is `Bus` accessible from plugin? | `~/Documents/sites/kidsinai/opencode-kernel/packages/opencode/src/bus/index.ts` | `Bus.publish` exists but is internal to the `opencode/` package; not re-exported through `@opencode-ai/plugin` |
+| Does `PluginInput` expose a publish method? | `packages/plugin/src/index.ts:57-66` | No. `PluginInput` exposes `client`, `project`, `directory`, `worktree`, `experimental_workspace`, `serverUrl`, `$`. Client is `ReturnType<typeof createOpencodeClient>` — read/RPC only, no publish |
+| Does the `Hooks.event` hook allow plugins to emit, or only to receive? | `packages/plugin/src/index.ts:223` | Receive only — signature `event?: (input: { event: Event }) => Promise<void>` has no output channel to mutate |
+| Does the SDK v2 client have a `.publish()` / `.emit()` method? | `~/Documents/sites/kidsinai/opencode-kernel/packages/sdk/js/src/v2/` | No. Resource clients are session / permission / question / worktree / part / sync / global / experimental — all are CRUD or subscribe-only |
+| Could plugin monkey-patch by importing kernel internals? | Architecture rule | Violates `KERNEL.md:21-28` ("no kernel code imported by product") — explicitly off-limits |
+
+**Path A (plugin → bus.publish → SSE) is not viable through public API.** Implementing it would require either forking opencode-kernel to expose Bus, or monkey-patching imports — both rejected by `KERNEL.md` and PRD §2.2.
+
+**Path B (client tails serve stderr) is the chosen pipeline.** Implications:
+
+1. **Client owns the `opencode serve` subprocess.** Wrapper's role shrinks to: read auth env → exec `kids-client`. Client spawns serve as a child, pipes stderr, parses lines matching `[kids-audit] ` prefix as JSON events, drops other lines (or routes to debug log).
+2. **PRD §5.3 "client crashes, serve survives, kid reconnects" deferred from V0 MVP.** When client dies, its serve child dies. Session resume is a Workshop #3+ polish item. Phase 2.5 ships without it; this is a deliberate scope cut to match the audit pipeline reality. PRD §3.5 already lists session multi-window / parallel as "not in V0," so this fits.
+3. **Plugin audit emit format stays the same** — no plugin-side change needed for Phase 2.5. The existing `[kids-audit] {...}` stderr lines are the wire format. Future schema versioning lives in the JSON payload, not the framing.
+4. **Fallback for the deferred session-resume path (V1)**: client could redirect serve's stderr to a logfile at spawn time, then a "reconnect" mode tails the file from offset. Not implemented now; recorded for V1 planning.
+
+**Code patterns to use in client implementation:**
+- Spawn: `Bun.spawn({ cmd: ["opencode", "serve", "--hostname", "127.0.0.1", "--port", "4096"], env: { ...process.env, OPENCODE_SERVER_PASSWORD }, stderr: "pipe", stdout: "pipe" })`
+- Readiness probe: poll `GET http://127.0.0.1:4096/app` with Basic Auth until 200 (timeout 10s) — same pattern the upstream SDK uses internally per Q2
+- Stderr parse loop: line-buffered stream, on each line if starts with `[kids-audit] ` → JSON.parse the rest → push to audit pipeline; else → debug log
+
+**Affects in implementation plan**: Day 1-2 wrapper now slimmer; Day 3-5 core adds `serve-manager.ts` that owns subprocess + stderr parser; audit-pipeline.ts consumes from serve-manager output rather than a separate SSE subscription.
+
+---
+
 ## Revision history
 
 | Version | Date | Author | Note |
 |---|---|---|---|
 | 0.1 | 2026-05-16 | kids-opencode session | Q1 + Q2 resolved against opencode-kernel snapshot. Q3 deferred to Phase 2.5 Day 1. |
+| 0.2 | 2026-05-16 | airbotix session (Phase 2.5 day-0) | Q3 resolved. Path A (bus.publish) ruled out; Path B (client owns serve, tails stderr) chosen. Session-resume deferred to V1. |

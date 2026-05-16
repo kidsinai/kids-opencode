@@ -153,35 +153,45 @@ Each phase has Goal / Tasks / Acceptance / Risks. Weekly the engineer ticks boxe
 
 ---
 
-## Phase 2.5 — Own-client TUI (C route, after Workshop #1) — W9-11
+## Phase 2.5 — Own-client TUI (C route, after Workshop #1) — W9-11 🟢 MVP scaffolded 2026-05-16
 
-> Inserted v0.4. Source: client-PRD §9.3 + D-CL1 + D-CL10. Unblocked by `docs/v2-api-verification.md` Q2 finding (serve stdout readiness signal is stable; matches the regex upstream SDK already uses).
+> Inserted v0.4. MVP landed 2026-05-16 (airbotix session, plan `~/.claude/plans/resilient-sleeping-pancake.md`). Q3 resolved during day-0 spike (see docs/v2-api-verification.md v0.2). D-CL7 locked: **Ink (Node + React)**. Source: client-PRD §9.3 + D-CL1 + D-CL10 + D-CL11.
 
 **Goal**: own TUI client that talks to `opencode serve` over SDK v2 — full chat rendering, mission UI, permission dialog, audit pipeline, friendly error screens. Reuses Phase 2.4 theme + sound + placeholders + system-prompt overlay; reuses Q1/Q2 verification work.
 
 ### Day-1 prerequisites
-- [ ] **Q4 spike** — Bubble Tea (Go) vs Ink (Node + React). 1-day spike each, judged on TUI render quality, dev velocity, and Phase 7 (Tauri) reusability of core logic
-- [ ] **Q3 spike** — verify v2 SDK SSE event subscription works for plugin-emitted audit events (1 hour). If failed, fallback path is stderr-tail sidecar (documented in `docs/v2-api-verification.md` Q3)
-- [ ] D-CL7 (TUI framework) locked
+- [x] **Q4 — TUI framework selected: Ink (Node + React)** — picked for V1 Tauri code reuse, mainstream ecosystem, no new runtime dep beyond the bun installer already drops. Bubble Tea / OpenTUI considered and rejected (see plan `~/.claude/plans/resilient-sleeping-pancake.md` §"Decision" + AskUserQuestion record)
+- [x] **Q3 spike** — plugin cannot publish custom events through public API. Path B (client tails serve stderr) chosen. Client owns `opencode serve` as a child; PRD §5.3 session-resume deferred from V0 MVP. Recorded in `docs/v2-api-verification.md` Q3
+- [x] D-CL7 (TUI framework) locked
 
 ### Tasks
-- [ ] Pick TUI framework (D-CL7) and bootstrap `packages/kids-client/`
-- [ ] Client-core / render-layer split — core is pure state machine + business logic (TS), render layer is per-target (TUI now, web later)
-- [ ] Wrapper auto-spawns `opencode serve` per the readiness-signal pattern documented in `docs/v2-api-verification.md` Q2; tracks child PID; SIGTERM on parent exit
-- [ ] Wrapper detection: if `127.0.0.1:4096/app` already responds, attach to that serve instead of spawning a duplicate
-- [ ] Startup screen (PRD §3.1): welcome within 5 seconds, 4 quick-start key options visible
-- [ ] Mission-in-progress screen (PRD §3.2): progress bar + Stars balance + actor indicator + streaming chat pane
-- [ ] Permission confirmation modal (PRD §3.4): y/n/e three options, wired to upstream permission API
-- [ ] SSE event subscription: reconnect within 5s on disconnect; back-pressure handling
-- [ ] Client-side audit upload pipeline to `Airbotix-AI/platform-backend /api/audit` with retry + local-disk buffer + batch upload
-- [ ] Friendly error screens for 6 failure modes: serve won't start, network down, Stars exhausted, password wrong, config missing, AI hung
-- [ ] First-class non-English locale support (zh-Hans at minimum); locale switching at runtime
+- [x] Pick TUI framework (D-CL7) and bootstrap `packages/kids-client/` — package.json, tsconfig, bin/, src/, test/ scaffolding landed
+- [x] Client-core / render-layer split — `src/core/*` is pure TS (no Ink imports); `src/render/ink/*` is the Ink-bound render adapter. V1 Tauri replaces only `render/`
+- [x] Wrapper auto-spawns `opencode serve` (lifecycle now owned by `kids-client` via `core/serve-manager.ts`, not the wrapper — cleaner because the client also needs stderr for the audit pipeline)
+- [x] Wrapper detection: client probes `127.0.0.1:4096/app` first; if reachable, attaches without spawning duplicate
+- [x] Startup screen (PRD §3.1) — welcome card + 4 key options (Enter/c/r/h); zh-Hans + en strings; Kids Helpline 1800 55 1800 always visible
+- [x] Mission-in-progress screen (PRD §3.2) — Header (mission + Stars budget/balance) + ChatStream (👦/🤖/⚙️ actor badges + Static history + live stream split) + Input + Thinking spinner
+- [x] Permission confirmation modal (PRD §3.4) — y/n/e wired through `client.permission.reply(requestID, { reply })`
+- [x] SSE event subscription with 5s reconnect / 10 retries before surfacing `serve_unreachable` error
+- [x] Client-side audit pipeline — `core/audit-pipeline.ts` writes jsonl to `~/.config/kids-opencode/audit-buffer.jsonl`; remote POST plumbed (`@airbotix/audit-schema` consumer) but disabled until platform-backend endpoint ships
+- [x] Friendly error screens — single component with 6 variants: serve_unreachable / network_down / stars_exhausted / auth_failed / config_missing / ai_hung
+- [x] Locale: `KIDS_LOCALE` env then `$LANG` decides zh-Hans vs en. Runtime switching deferred to V1 (PRD §3.5 explicit scope cut)
+- [x] DangerousTopicModal — patterns mirrored from `kids-tui-plugin/src/dangerous-topic.ts`; intercepts both kid input and AI emit; Kids Helpline overlay always wins screen priority
+- [x] `kids-opencode --shutdown` subcommand — `lsof -ti tcp:4096 | xargs kill` safety hatch
+- [x] CI step — `bun test` in `packages/kids-client/` wired into `.github/workflows/ci.yml`
 
 ### Acceptance
-- [ ] In a clean macOS shell, a single `kids-opencode` invocation runs Phase 2.5 client + serve subprocess; first paint < 3s
-- [ ] Workshop #2 (W13-14) uses Phase 2.5 client end-to-end; ≥18/20 kids finish portfolio Course Pack
-- [ ] Audit pipeline observed delivering events to a mock platform-backend at ≥99% success
-- [ ] No upstream opencode TUI code visible in any kid-facing flow
+- [ ] In a clean macOS shell, a single `kids-opencode` invocation runs Phase 2.5 client + serve subprocess; first paint < 3s — **needs dogfood run on a clean box (open)**
+- [ ] Workshop #2 (W13-14) uses Phase 2.5 client end-to-end; ≥18/20 kids finish portfolio Course Pack — **W13-14 cohort recruitment open**
+- [ ] Audit pipeline observed delivering events to a mock platform-backend at ≥99% success — **awaits platform-backend `/api/audit` endpoint**
+- [x] No upstream opencode TUI code visible in any kid-facing flow — wrapper now exec's `kids-client`, not `opencode`; serve runs headless
+
+### MVP scope cuts (deliberate, recorded for V1)
+- Session resume across client crash (PRD §5.3) — client kills serve on exit. Re-enable in V1 by redirecting serve stderr to a logfile at spawn + tailing from offset on reconnect.
+- Sound pack — V1 Tauri (no audio in TUI).
+- Embedded browser preview — V1 Tauri (kid switches to a real browser tab for preview in V0 MVP).
+- Runtime locale switching — V0 reads `$LANG` once.
+- Multi-mission parallel sessions — single active session only.
 
 ### Risks
 - Phase 2.5 work crosses Workshop #1 → #2 transition; if Workshop #1 reveals fundamental UX issues, Phase 2.5 design absorbs them, lengthening the cycle. Mitigation: minimal-viable client for Workshop #2 covers only the 3 critical screens (start / mission / permission); polish lands after.

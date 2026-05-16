@@ -1,0 +1,4 @@
+#!/usr/bin/env bun
+// Entry shim for the kids-client TUI. The actual app lives in src/index.tsx.
+// The wrapper bin/kids-opencode exec's this binary after preparing env.
+import "../src/index.tsx"

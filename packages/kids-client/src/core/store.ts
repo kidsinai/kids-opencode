@@ -1,0 +1,134 @@
+/**
+ * In-process state store. Pure TS, no Ink imports — V1 Tauri (WebView)
+ * reuses this verbatim.
+ *
+ * Subscription pattern: dumb pub/sub. Renderers (Ink today, WebView later)
+ * subscribe to changes via getSnapshot + subscribe pair, suitable for
+ * React 18 useSyncExternalStore.
+ */
+
+export type Screen =
+  | { kind: "loading" }
+  | { kind: "startup" }
+  | { kind: "mission" }
+  | { kind: "error"; variant: ErrorVariant; detail?: string }
+
+export type ErrorVariant =
+  | "serve_unreachable"
+  | "network_down"
+  | "stars_exhausted"
+  | "auth_failed"
+  | "config_missing"
+  | "ai_hung"
+
+export interface ChatMessage {
+  id: string
+  actor: "kid" | "agent" | "system"
+  text: string
+  /** Stream still flowing for this message. */
+  streaming: boolean
+  ts: number
+}
+
+export interface PendingPermission {
+  requestID: string
+  tool?: string
+  /** Free-form text the kid sees ("AI 想要读取 index.html") */
+  summary: string
+  metadata: Record<string, unknown>
+}
+
+export interface DangerousTopic {
+  category: "self_harm" | "violence" | "adult" | "other"
+  snippet: string
+}
+
+export interface KidsClientState {
+  screen: Screen
+  sessionId: string | null
+  messages: ChatMessage[]
+  starsBalance: number
+  starsBudget: number
+  pendingPermission: PendingPermission | null
+  dangerousTopic: DangerousTopic | null
+  thinking: boolean
+  /** Set when wrapper passed --course or KIDS_COURSE_PACK. */
+  coursePack: string | null
+  mission: string | null
+  /** Plugin emitted audit events kept for parent dashboard sync (capped). */
+  auditBuffer: unknown[]
+}
+
+type Listener = (state: KidsClientState) => void
+
+const INITIAL: KidsClientState = {
+  screen: { kind: "loading" },
+  sessionId: null,
+  messages: [],
+  starsBalance: 0,
+  starsBudget: 0,
+  pendingPermission: null,
+  dangerousTopic: null,
+  thinking: false,
+  coursePack: null,
+  mission: null,
+  auditBuffer: [],
+}
+
+const AUDIT_BUFFER_CAP = 500
+
+export class Store {
+  private state: KidsClientState = INITIAL
+  private listeners = new Set<Listener>()
+
+  getSnapshot(): KidsClientState {
+    return this.state
+  }
+
+  subscribe(fn: Listener): () => void {
+    this.listeners.add(fn)
+    return () => this.listeners.delete(fn)
+  }
+
+  update(patch: Partial<KidsClientState>): void {
+    this.state = { ...this.state, ...patch }
+    this.notify()
+  }
+
+  appendMessage(msg: ChatMessage): void {
+    this.state = { ...this.state, messages: [...this.state.messages, msg] }
+    this.notify()
+  }
+
+  appendDelta(messageId: string, delta: string): void {
+    const messages = this.state.messages.map((m) =>
+      m.id === messageId ? { ...m, text: m.text + delta } : m,
+    )
+    this.state = { ...this.state, messages }
+    this.notify()
+  }
+
+  endStream(messageId: string): void {
+    const messages = this.state.messages.map((m) =>
+      m.id === messageId ? { ...m, streaming: false } : m,
+    )
+    this.state = { ...this.state, messages, thinking: false }
+    this.notify()
+  }
+
+  pushAudit(event: unknown): void {
+    const next = [...this.state.auditBuffer, event]
+    if (next.length > AUDIT_BUFFER_CAP) next.shift()
+    this.state = { ...this.state, auditBuffer: next }
+    this.notify()
+  }
+
+  reset(): void {
+    this.state = INITIAL
+    this.notify()
+  }
+
+  private notify(): void {
+    for (const fn of this.listeners) fn(this.state)
+  }
+}

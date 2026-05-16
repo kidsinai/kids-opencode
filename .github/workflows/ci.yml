@@ -58,6 +58,14 @@ jobs:
         working-directory: packages/kids-plugin
         run: bun test
 
+      - name: TUI plugin tests
+        working-directory: packages/kids-tui-plugin
+        run: bun test
+
+      - name: Client tests (Phase 2.5 own-client TUI)
+        working-directory: packages/kids-client
+        run: bun test
+
       - name: Smoke — plugin loads
         run: |
           bun --print "(await import('./packages/kids-plugin/src/index.ts')).server.constructor.name" \
