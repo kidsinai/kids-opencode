@@ -19,6 +19,7 @@ KIDS_VERSION="0.0.1"
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/kids-opencode"
 PREFIX="${PREFIX:-/usr/local}"
 PLUGIN_PACKAGE="@kidsinai/kids-opencode-plugin"
+CLIENT_PACKAGE="@kidsinai/kids-client"
 RAW_BASE="https://raw.githubusercontent.com/kidsinai/kids-opencode/main"
 
 # SHA-256 of the corresponding bin/kids-opencode at the same release tag.
@@ -100,6 +101,19 @@ fi
 say "installing $PLUGIN_PACKAGE via opencode plugin manager…"
 opencode plugin install "$PLUGIN_PACKAGE" || \
   fail "could not install plugin $PLUGIN_PACKAGE. See https://airbotix.ai/help/install for help."
+
+# ─── 2b. kids-client (own-client TUI, Phase 2.5) ──────────────────────────
+# kids-client is the Ink-based TUI the kid actually sees. It spawns
+# `opencode serve` as a child + connects via @opencode-ai/sdk/v2. Distributed
+# via npm so `bun add -g` drops the `kids-client` binary on PATH where the
+# wrapper looks for it.
+say "installing $CLIENT_PACKAGE globally via bun…"
+if command -v bun >/dev/null 2>&1; then
+  bun add -g "$CLIENT_PACKAGE" || \
+    fail "could not install $CLIENT_PACKAGE. See https://airbotix.ai/help/install for help."
+else
+  fail "bun not available after install step 1 — cannot install $CLIENT_PACKAGE."
+fi
 
 # ─── 3. config + server-password ─────────────────────────────────────────
 mkdir -p "$CONFIG_DIR"

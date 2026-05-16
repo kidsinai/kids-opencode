@@ -51,6 +51,69 @@ case "${1:-}" in
     fi
     exec bun "$PLUGIN_DIR/src/check-runner.ts" "$@"
     ;;
+  register)
+    # Per PRD §7.3, identity + payment + tenant-key issuance happens here.
+    # The full flow needs an OAuth-style browser callback to
+    # app.airbotix.ai/portal/signup, which depends on airbotix-app shipping
+    # a callback handler (PRD §10 Q6). Until that lands, register prints
+    # the device-code fallback flow + helpful URLs.
+    shift
+    CONFIG_DIR_REG="$(dirname "${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}")"
+    mkdir -p "$CONFIG_DIR_REG"
+    chmod 700 "$CONFIG_DIR_REG"
+    DEVICE_ID_FILE="$CONFIG_DIR_REG/device-id"
+    if [ ! -f "$DEVICE_ID_FILE" ]; then
+      if command -v uuidgen >/dev/null 2>&1; then
+        uuidgen | tr 'A-Z' 'a-z' > "$DEVICE_ID_FILE"
+      else
+        # POSIX-portable random 16-byte hex (works on macOS + Linux).
+        od -An -N16 -tx1 /dev/urandom | tr -d ' \n' > "$DEVICE_ID_FILE"
+      fi
+      chmod 600 "$DEVICE_ID_FILE"
+    fi
+    DEVICE_ID="$(cat "$DEVICE_ID_FILE")"
+    cat <<REGEOF
+
+kids-opencode register
+──────────────────────
+
+Step 1: open the parent portal in any browser:
+  https://app.airbotix.ai/portal/signup?device=$DEVICE_ID
+
+Step 2: complete parent identity + payment + Kid Profile setup.
+
+Step 3: when the portal shows a 6-character code, paste it here:
+
+REGEOF
+    printf "  code: "
+    read -r CODE
+    if [ -z "$CODE" ]; then
+      echo "kids-opencode: no code entered; nothing saved." >&2
+      exit 1
+    fi
+    # Until the portal callback is live, we accept the code shape but
+    # cannot exchange it for a tenant key yet. We persist what we got so
+    # a future kids-opencode update can finish the round-trip.
+    echo "$CODE" > "$CONFIG_DIR_REG/register-code"
+    chmod 600 "$CONFIG_DIR_REG/register-code"
+    echo "kids-opencode: code saved to $CONFIG_DIR_REG/register-code." >&2
+    echo "" >&2
+    echo "⚠️  Tenant-key exchange not yet live (airbotix-app portal callback in progress)." >&2
+    echo "    Until then, set DEEPROUTER_API_KEY yourself (or run with" >&2
+    echo "    KIDS_LLM_BYPASS_GATEWAY=1 + an Anthropic key for dogfood)." >&2
+    exit 0
+    ;;
+  --update)
+    # PRD §7.4: re-run the installer. install.sh is required to be
+    # idempotent — it preserves config / server-password / api-key /
+    # device-id and only updates binaries.
+    if ! command -v curl >/dev/null 2>&1; then
+      echo "kids-opencode: 'curl' not found; can't self-update." >&2
+      exit 1
+    fi
+    echo "kids-opencode: pulling latest installer from airbotix.ai/install/kids…" >&2
+    exec curl -fsSL https://airbotix.ai/install/kids | sh
+    ;;
   --shutdown)
     # Stop any running `opencode serve` at 127.0.0.1:4096 started by a previous
     # kids-client session. Best-effort: we don't track PIDs on disk for V0 MVP
@@ -91,6 +154,8 @@ USAGE
   kids-opencode --course <pack> --mission <id>
                                    Start at a specific Mission
   kids-opencode check <mission>    Check if you finished a Mission
+  kids-opencode register           Register your family (parent does this once)
+  kids-opencode --update           Update kids-opencode to the latest version
   kids-opencode --shutdown         Stop the background AI server
   kids-opencode --version          Show version
   kids-opencode --kids-help        Show this help (in plain language for kids)

@@ -1,0 +1,63 @@
+name: Upstream sync gauntlet
+
+# Runs on PRs that change kids-plugin/package.json (where we pin the
+# @opencode-ai/* exact versions). Source: PLAN.md "Upstream sync policy"
+# §"Upgrade gauntlet (10-15 checks before merging any upstream bump)".
+#
+# Gates merge if any of the static checks regress. Live checks are
+# scaffolded under packages/kids-plugin/test/gauntlet/live.test.ts and
+# run only when KIDS_GAUNTLET_LIVE=1 (not the case in this default
+# workflow — kept fast on every PR).
+
+on:
+  pull_request:
+    paths:
+      - 'packages/kids-plugin/package.json'
+      - 'packages/kids-tui-plugin/package.json'
+      - 'packages/kids-client/package.json'
+      - 'bun.lock'
+      - 'install.sh'
+      - 'packages/kids-plugin/test/gauntlet/**'
+      - '.github/workflows/upstream-bump-gauntlet.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: gauntlet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static gauntlet (no live serve)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.x
+
+      - name: Cache Bun store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: gauntlet-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+          restore-keys: |
+            gauntlet-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Workspace typecheck (catches upstream type drift)
+        run: bun --filter '*' typecheck
+
+      - name: Run static gauntlet
+        working-directory: packages/kids-plugin
+        run: bun test test/gauntlet/static.test.ts
+
+      - name: Run live gauntlet stub (gated, fails-fast if env missing)
+        working-directory: packages/kids-plugin
+        run: bun test test/gauntlet/live.test.ts

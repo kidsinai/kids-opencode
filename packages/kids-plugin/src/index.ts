@@ -117,11 +117,39 @@ function summariseArgs(tool: string, args: unknown): string {
   }
 }
 
+/**
+ * Identity envelope stamped onto every audit line. Sourced from env vars
+ * the wrapper / client populate at session boot. Required by the cross-repo
+ * audit-event-schema PRD §3.2 — without these, platform-backend Phase 5
+ * aggregation cannot join events back to a family / kid / classroom.
+ *
+ * All four are optional at the wire level (dogfood / Workshop modes may
+ * not populate every one), but plugin emits the keys with null values so
+ * downstream parsers always see a consistent shape.
+ */
+export interface AuditIdentity {
+  family_id: string | null
+  kid_profile_id: string | null
+  device_id: string | null
+  workshop_class_id: string | null
+}
+
+export function readIdentityFromEnv(): AuditIdentity {
+  return {
+    family_id: process.env.KIDS_FAMILY_ID || null,
+    kid_profile_id: process.env.KIDS_PROFILE_ID || null,
+    device_id: process.env.KIDS_DEVICE_ID || null,
+    workshop_class_id: process.env.KIDS_WORKSHOP_CLASS_ID || null,
+  }
+}
+
 export function audit(event: string, fields: Record<string, unknown>): void {
   const line = {
     ts: new Date().toISOString(),
     component: "kids-opencode-plugin",
+    schema_version: "1",
     event,
+    identity: readIdentityFromEnv(),
     ...fields,
   }
   // V0: stderr only. V1+: POST to platform-backend audit endpoint.
