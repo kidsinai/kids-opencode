@@ -62,15 +62,18 @@ export function validateEnv(env: KidsClientEnv): { ok: true } | { ok: false; rea
   // setup wizard writes whatever the parent picked into ~/.config/kids-opencode/env
   // which the wrapper sources before exec.
   //
-  // KIDS_OAUTH_PROVIDER was previously trusted as a credential signal —
-  // that was wrong: upstream opencode dropped Anthropic Pro/Max OAuth in
-  // 1.3.0, so the marker existed without a real credential and opencode
-  // silently fell back to its own api-key picker. Users now get re-routed
-  // through SetupScreen until they paste an actual API key.
+  // KIDS_OAUTH_PROVIDER signals that the wrapper finished
+  // `opencode auth login` and opencode now holds an OAuth token in its
+  // own auth.json store. Only trusted when paired with a provider opencode
+  // actually supports OAuth for — Anthropic Pro/Max stale markers from
+  // 0.0.7/0.0.8 are filtered out in hasAnyProviderKey via the
+  // OAUTH_PROVIDERS check, but here at the env level we accept the bare
+  // marker since validity will be re-checked by opencode at serve time.
   const hasAnyKey =
     env.deeprouterApiKey
     || process.env.ANTHROPIC_API_KEY
     || process.env.OPENAI_API_KEY
+    || process.env.KIDS_OAUTH_PROVIDER
   if (!env.bypassGateway && !hasAnyKey) {
     return {
       ok: false,

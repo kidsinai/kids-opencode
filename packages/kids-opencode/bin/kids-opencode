@@ -20,7 +20,7 @@
 #   8. exec kids-client; kids-client supervises the AI engine.
 set -e
 
-KIDS_OPENCODE_VERSION="0.0.9"
+KIDS_OPENCODE_VERSION="0.0.10"
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
 CONFIG_DIR_WRAPPER="$(dirname "$CONFIG")"
 
@@ -432,8 +432,15 @@ signing in (a browser tab will open) and we'll pick back up automatically.
 
 OAUTHMSG
 
+  # Pass --method too if the setup wizard staged one (KIDS_OAUTH_METHOD).
+  # Without it opencode would still show its own method picker and the kid
+  # would be confused: "I already chose Pro/Plus in the wizard, why ask?"
   set +e
-  opencode auth login --provider "$KIDS_OAUTH_PROVIDER"
+  if [ -n "${KIDS_OAUTH_METHOD:-}" ]; then
+    opencode auth login --provider "$KIDS_OAUTH_PROVIDER" --method "$KIDS_OAUTH_METHOD"
+  else
+    opencode auth login --provider "$KIDS_OAUTH_PROVIDER"
+  fi
   AUTH_RC=$?
   set -e
 

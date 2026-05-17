@@ -427,8 +427,8 @@ const STRINGS = {
       keys: "[↑↓] 选 · [Enter] 确认 · [Esc] 返回",
       options: [
         {
-          label: "用我的 Claude Pro/Max 订阅（推荐）",
-          hint: "不用 API key、不用充值；用现有 claude.ai 账号一键登录",
+          label: "用我的 ChatGPT Plus / Pro 订阅（推荐）",
+          hint: "不用 API key、不用充值；用现有 chatgpt.com 账号一键登录",
         },
         {
           label: "用 API key（按量计费 ~$5/月）",
@@ -437,8 +437,8 @@ const STRINGS = {
       ],
     },
     oauthHandoff: {
-      title: "正在让 Claude 登录接管屏幕…",
-      line1: "马上会跳出浏览器让你登录 claude.ai 账号。",
+      title: "正在让 ChatGPT 登录接管屏幕…",
+      line1: "马上会跳出浏览器让你登录 chatgpt.com 账号。",
       line2: "登录完后我会自动接回来，给孩子继续。",
     },
     apiKeyTitle: (label: string) => `输入 ${label} 的 API key`,
@@ -496,8 +496,8 @@ const STRINGS = {
       keys: "[↑↓] choose · [Enter] confirm · [Esc] back",
       options: [
         {
-          label: "Use my Claude Pro/Max subscription (recommended)",
-          hint: "No API key, no top-up — sign in with your existing claude.ai account",
+          label: "Use my ChatGPT Plus / Pro subscription (recommended)",
+          hint: "No API key, no top-up — sign in with your existing chatgpt.com account",
         },
         {
           label: "Use an API key (pay-as-you-go ~$5/month)",
@@ -506,8 +506,8 @@ const STRINGS = {
       ],
     },
     oauthHandoff: {
-      title: "Handing off to Claude login…",
-      line1: "A browser window will open to sign in to your claude.ai account.",
+      title: "Handing off to ChatGPT login…",
+      line1: "A browser window will open to sign in to your chatgpt.com account.",
       line2: "I'll pick back up automatically once you're done.",
     },
     apiKeyTitle: (label: string) => `Enter your ${label} API key`,

@@ -19,28 +19,40 @@ export type ProviderId = "anthropic" | "openai" | "deeprouter"
 /**
  * Wire protocol between SetupScreen and bin/kids-opencode wrapper:
  * kids-client exits with this code to ask the wrapper to run
- * `opencode auth login --provider <p>` (interactive OAuth that needs the
- * TTY), then re-exec kids-client. See bin/kids-opencode §11 loop.
+ * `opencode auth login --provider <p> --method <m>` (interactive OAuth
+ * that needs the TTY), then re-exec kids-client. See bin/kids-opencode loop.
  */
 export const OAUTH_HANDOFF_EXIT_CODE = 123
 
 /**
- * Providers for which upstream opencode currently ships an OAuth/subscription
- * login method. Anthropic Pro/Max was REMOVED in opencode 1.3.0 — Anthropic's
- * ToS prohibits using consumer Claude Pro/Max subscriptions through coding
- * agents like opencode. See:
- *   ~/Documents/sites/kidsinai/opencode-kernel/packages/web/src/content/docs/providers.mdx
+ * Providers for which upstream opencode currently ships an OAuth /
+ * subscription login method.
  *
- * OpenAI ChatGPT Plus IS supported by upstream and is the obvious next
- * candidate to wire here — but until that's done, no provider triggers the
- * auth_choice step and every kid lands directly on the api-key screen.
+ * - openai: ChatGPT Pro/Plus via OAuth. Verified in
+ *   ~/Documents/sites/kidsinai/opencode-kernel/packages/opencode/src/plugin/codex.ts
+ *   (methods: "ChatGPT Pro/Plus (browser)" + "(headless)"). Allowed models
+ *   include gpt-5.4-mini / gpt-5.3-codex / gpt-5.5.
  *
- * The OAuth handoff infrastructure below (OAUTH_HANDOFF_EXIT_CODE,
- * saveSetupOauth, the wrapper's exit-123 loop, the auth_choice screen) is
- * intentionally kept inert rather than deleted — flipping OPENAI back on
- * here when ChatGPT Plus is wired is a one-line revival.
+ * - anthropic: NOT supported. Removed in opencode 1.3.0 because Anthropic's
+ *   ToS prohibits Pro/Max in coding agents. Do not re-add.
+ *
+ * - deeprouter: own gateway, uses api-key.
  */
-export const OAUTH_PROVIDERS: ReadonlyArray<ProviderId> = [] as const
+export const OAUTH_PROVIDERS: ReadonlyArray<ProviderId> = ["openai"] as const
+
+/** Per-provider OAuth method label expected by `opencode auth login --method`. */
+export const OAUTH_METHOD_LABELS: Partial<Record<ProviderId, string>> = {
+  openai: "ChatGPT Pro/Plus (browser)",
+}
+
+/**
+ * Default model id to write into opencode.json when the user picks OAuth
+ * (the api-key default is in PROVIDERS[i].defaultModel below — different
+ * because the codex plugin restricts the model list when OAuth is active).
+ */
+const OAUTH_DEFAULT_MODELS: Partial<Record<ProviderId, string>> = {
+  openai: "openai/gpt-5.4-mini",
+}
 
 export interface ProviderChoice {
   id: ProviderId
@@ -68,8 +80,8 @@ export const PROVIDERS: ProviderChoice[] = [
   },
   {
     id: "openai",
-    label: "OpenAI GPT-4",
-    hint: "Also works. ~$5-10/month for typical kid use.",
+    label: "OpenAI GPT (ChatGPT Plus/Pro 可直接登录)",
+    hint: "Already pay for ChatGPT Plus/Pro? Sign in with that — no API key. Otherwise pay-as-you-go ~$5-10/month.",
     envVar: "OPENAI_API_KEY",
     apiKeyUrl: "https://platform.openai.com/api-keys",
     config: (env) => ({
@@ -136,38 +148,49 @@ export interface SaveOauthOptions {
 /**
  * Stage the OAuth handoff. We write opencode.json without an apiKey block
  * (opencode reads OAuth tokens from its own auth.json), drop any stale
- * provider API keys, and write a KIDS_OAUTH_PROVIDER marker so the
- * wrapper knows which provider to log into. The actual
- * `opencode auth login --provider <p>` invocation happens in
- * bin/kids-opencode after kids-client exits with OAUTH_HANDOFF_EXIT_CODE.
+ * provider API keys, and write KIDS_OAUTH_PROVIDER + KIDS_OAUTH_METHOD
+ * markers so the wrapper knows which provider+method to log into. The
+ * actual `opencode auth login --provider <p> --method <m>` invocation
+ * happens in bin/kids-opencode after kids-client exits with
+ * OAUTH_HANDOFF_EXIT_CODE.
  */
 export function saveSetupOauth(opts: SaveOauthOptions): void {
   const provider = findProvider(opts.provider)
+  const methodLabel = OAUTH_METHOD_LABELS[opts.provider]
+  if (!methodLabel) {
+    throw new Error(`No OAuth method label registered for provider '${opts.provider}'.`)
+  }
   ensureConfigDir(opts.configDir)
 
   // 1. Update env file: clear this provider's API key (avoid stale leakage),
-  //    set marker pointing at the OAuth provider.
+  //    set markers pointing at the OAuth provider + method.
   const envPath = join(opts.configDir, "env")
   const existing = readEnvFile(envPath)
   delete existing[provider.envVar]
   existing.KIDS_OAUTH_PROVIDER = opts.provider
+  existing.KIDS_OAUTH_METHOD = methodLabel
   writeEnvFile(envPath, existing)
 
   // 2. opencode.json without apiKey — opencode uses its auth.json store.
-  writeOpencodeConfig(opts.configDir, provider, { withApiKey: false })
+  //    Use the OAuth-specific default model since the codex plugin restricts
+  //    the model list when OAuth is the active credential.
+  writeOpencodeConfig(opts.configDir, provider, {
+    withApiKey: false,
+    modelOverride: OAUTH_DEFAULT_MODELS[opts.provider],
+  })
 }
 
 function writeOpencodeConfig(
   configDir: string,
   provider: ProviderChoice,
-  flags: { withApiKey: boolean },
+  flags: { withApiKey: boolean; modelOverride?: string },
 ): void {
   const configPath = join(configDir, "opencode.json")
   const config = readJsonOrEmpty(configPath)
   config.provider = flags.withApiKey
     ? provider.config(provider.envVar)
     : { [provider.id]: {} }
-  config.model = provider.defaultModel
+  config.model = flags.modelOverride ?? provider.defaultModel
   if (!config.permission) {
     config.permission = {
       default: "ask",
@@ -188,16 +211,18 @@ function writeOpencodeConfig(
 export function hasAnyProviderKey(configDir: string): boolean {
   const env = readEnvFile(join(configDir, "env"))
   if (env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || env.DEEPROUTER_API_KEY) return true
+  // KIDS_OAUTH_PROVIDER means setup wizard staged an OAuth handoff and the
+  // wrapper successfully completed `opencode auth login`. opencode keeps the
+  // real token in its own auth.json — we trust it to gate on validity at
+  // serve time. (Only meaningful for providers in OAUTH_PROVIDERS; stale
+  // markers from removed providers are cleaned up at next setup.)
+  if (env.KIDS_OAUTH_PROVIDER && OAUTH_PROVIDERS.includes(env.KIDS_OAUTH_PROVIDER as ProviderId)) return true
   // Also accept keys present in the parent shell env (advanced users).
   return !!(
     process.env.ANTHROPIC_API_KEY
     || process.env.OPENAI_API_KEY
     || process.env.DEEPROUTER_API_KEY
   )
-  // Note: KIDS_OAUTH_PROVIDER marker is intentionally NOT accepted anymore.
-  // Users who got stuck with the marker but no actual OAuth credential
-  // (because opencode never had an Anthropic Pro/Max method to begin with)
-  // will be routed back through SetupScreen to pick an API-key flow.
 }
 
 /** Crude check of API key shape — refuses obvious typos. */
