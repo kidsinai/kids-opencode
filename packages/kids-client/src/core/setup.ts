@@ -54,7 +54,7 @@ export const PROVIDERS: ProviderChoice[] = [
   {
     id: "deeprouter",
     label: "DeepRouter (OpenAI-compatible gateway)",
-    hint: "Cheaper than going direct. One key gets all models (Anthropic, OpenAI, Google). Limited beta — invite-only.",
+    hint: "Cheaper than going direct + one key for all models (Anthropic, OpenAI, Google). Built-in kid-safe filters (NSFW + prompt-injection guard). Limited beta — invite-only.",
     envVar: "DEEPROUTER_API_KEY",
     apiKeyUrl: "https://deeprouter.ai/",
     config: (env) => ({
