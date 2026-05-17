@@ -53,10 +53,10 @@ export const PROVIDERS: ProviderChoice[] = [
   },
   {
     id: "deeprouter",
-    label: "DeepRouter (Airbotix's own gateway)",
-    hint: "Not yet live for public use; recommended for staff dogfood only.",
+    label: "DeepRouter (OpenAI-compatible gateway)",
+    hint: "Cheaper than going direct. One key gets all models (Anthropic, OpenAI, Google). Limited beta — invite-only.",
     envVar: "DEEPROUTER_API_KEY",
-    apiKeyUrl: "https://app.airbotix.ai/portal/wallet",
+    apiKeyUrl: "https://deeprouter.ai/",
     config: (env) => ({
       deeprouter: {
         type: "openai-compatible",
