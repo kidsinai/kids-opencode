@@ -215,11 +215,18 @@ export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenP
   }
 
   if (step === "apikey") {
+    const steps = t.providerSteps[provider.id]
     return (
       <Box flexDirection="column" borderStyle="double" borderColor={theme.accent} paddingX={2} paddingY={1}>
         <Text color={theme.accent} bold>{t.apiKeyTitle(providerObj.label)}</Text>
         <Box marginTop={1} flexDirection="column">
           <Text color={theme.fgDim}>{t.apiKeyHint(providerObj.apiKeyUrl)}</Text>
+        </Box>
+        <Box marginTop={1} flexDirection="column" paddingX={1}>
+          <Text color={theme.accent}>{t.stepsHeader}</Text>
+          {steps.map((line, i) => (
+            <Text key={i} color={theme.fgDim}>  {line}</Text>
+          ))}
         </Box>
         <Box marginTop={1}>
           <Text color={theme.kid}>🔑  </Text>
@@ -319,6 +326,29 @@ const STRINGS = {
     apiKeyEnter: "[Enter] 保存 · 你的 key 只存在本地",
     apiKeyBack: "[Esc] 选错了？回去重选",
     apiKeyInvalid: (env: string) => `这看起来不是有效的 ${env}。再试一次。`,
+    stepsHeader: "在哪里点开：",
+    providerSteps: {
+      anthropic: [
+        "1. 打开浏览器 → console.anthropic.com",
+        "2. 用 Google 账号登录，或邮箱注册（免费）",
+        "3. 右上角点头像 → Billing → Add credits → 充 $5 起（信用卡 / Apple Pay）",
+        "4. 左侧菜单点 API Keys → 按 \"Create Key\" 按钮 → 起个名（比如 kids）",
+        "5. 弹窗里复制 sk-ant- 开头的整串，回到这里粘上",
+      ],
+      openai: [
+        "1. 打开浏览器 → platform.openai.com/api-keys",
+        "2. 用 Google 账号登录，或邮箱注册",
+        "3. 左侧 Billing → Add to credit balance → 充 $5 起（信用卡）",
+        "4. 回到 API Keys → 按 \"+ Create new secret key\" → 起个名（比如 kids）",
+        "5. 弹窗里复制 sk- 开头的整串（只显示一次！），回来粘上",
+      ],
+      deeprouter: [
+        "1. 打开浏览器 → deeprouter.ai（目前内测，需要邀请码）",
+        "2. 拿邀请码注册账号",
+        "3. 控制台 → API Keys → 创建新 key",
+        "4. 复制 key，回到这里粘上",
+      ],
+    },
     saving: "保存中…",
     errTitle: "出了点问题",
     errRetry: "[Enter] 再试",
@@ -345,6 +375,29 @@ const STRINGS = {
     apiKeyEnter: "[Enter] save · Your key stays on this machine.",
     apiKeyBack: "[Esc] Picked wrong one? Go back and re-pick.",
     apiKeyInvalid: (env: string) => `That doesn't look like a valid ${env}. Try again.`,
+    stepsHeader: "Where to click:",
+    providerSteps: {
+      anthropic: [
+        "1. Open in browser → console.anthropic.com",
+        "2. Sign in with Google, or sign up with email (free)",
+        "3. Top-right profile → Billing → Add credits → top up $5+ (card / Apple Pay)",
+        "4. Left menu → API Keys → \"Create Key\" → name it (e.g. kids)",
+        "5. Copy the sk-ant-… string from the popup, paste it here",
+      ],
+      openai: [
+        "1. Open in browser → platform.openai.com/api-keys",
+        "2. Sign in with Google, or sign up with email",
+        "3. Left menu → Billing → Add to credit balance → top up $5+ (card)",
+        "4. Back to API Keys → \"+ Create new secret key\" → name it (e.g. kids)",
+        "5. Copy the sk- string from the popup (shown only once!), paste it here",
+      ],
+      deeprouter: [
+        "1. Open in browser → deeprouter.ai (closed beta — invite code required)",
+        "2. Sign up with the invite code",
+        "3. Dashboard → API Keys → Create new key",
+        "4. Copy the key, paste it here",
+      ],
+    },
     saving: "Saving…",
     errTitle: "Something went wrong",
     errRetry: "[Enter] Try again",
