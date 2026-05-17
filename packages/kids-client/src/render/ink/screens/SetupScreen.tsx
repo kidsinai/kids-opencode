@@ -94,6 +94,20 @@ export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenP
       if (key.escape) {
         setApiKey("")
         setStep("provider")
+      } else if (
+        (input === "d" || input === "D")
+        && provider.id !== "deeprouter"
+        && apiKey === ""
+      ) {
+        // Funnel: parent decides Anthropic/OpenAI billing is too much friction
+        // — switch to DeepRouter inline without re-traversing the picker.
+        // Guarded by `apiKey === ""` so the keystroke only diverts before
+        // the user has started typing; otherwise `d` is just a character.
+        const dIdx = PROVIDERS.findIndex((p) => p.id === "deeprouter")
+        if (dIdx >= 0) {
+          setProviderIdx(dIdx)
+          setApiKey("")
+        }
       }
     } else if (step === "done") {
       if (key.return) {
@@ -260,6 +274,11 @@ export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenP
         <Box>
           <Text color={theme.fgDim}>{t.apiKeyBack}</Text>
         </Box>
+        {provider.id !== "deeprouter" && (
+          <Box>
+            <Text color={theme.accent}>{t.apiKeyToDR}</Text>
+          </Box>
+        )}
       </Box>
     )
   }
@@ -325,6 +344,7 @@ const STRINGS = {
     apiKeyPlaceholder: (env: string) => `${env}（粘进来后按 Enter）`,
     apiKeyEnter: "[Enter] 保存 · 你的 key 只存在本地",
     apiKeyBack: "[Esc] 选错了？回去重选",
+    apiKeyToDR: "[d] 不想充值？改用 DeepRouter — 无需信用卡（输入前按）",
     apiKeyInvalid: (env: string) => `这看起来不是有效的 ${env}。再试一次。`,
     stepsHeader: "在哪里点开：",
     providerSteps: {
@@ -374,6 +394,7 @@ const STRINGS = {
     apiKeyPlaceholder: (env: string) => `${env} (paste then Enter)`,
     apiKeyEnter: "[Enter] save · Your key stays on this machine.",
     apiKeyBack: "[Esc] Picked wrong one? Go back and re-pick.",
+    apiKeyToDR: "[d] Skip the billing — use DeepRouter instead (no credit card). Press before typing.",
     apiKeyInvalid: (env: string) => `That doesn't look like a valid ${env}. Try again.`,
     stepsHeader: "Where to click:",
     providerSteps: {
