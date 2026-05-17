@@ -78,8 +78,8 @@ const STRINGS = {
     },
     stars_exhausted: {
       title: "今天的 ⭐ 用完了",
-      body: "明天再来，或者请家长在 airbotix.ai/portal/wallet 充值。",
-      retry: "重试",
+      body: "今天先到这里啦！\n你做得很好，我们明天接着来。\n或者找家长打开 airbotix.ai/portal/wallet 多充一点 ⭐，然后按 Enter 接着做。",
+      retry: "找完家长了，再试一次",
     },
     auth_failed: {
       title: "AI 老师认不出你",
@@ -111,8 +111,8 @@ const STRINGS = {
     },
     stars_exhausted: {
       title: "Out of ⭐ for today",
-      body: "Come back tomorrow, or ask a parent to top up at airbotix.ai/portal/wallet.",
-      retry: "Retry",
+      body: "Great work today!\nWe'll pick this up tomorrow.\nOr ask a parent to top up at airbotix.ai/portal/wallet, then press Enter to keep going.",
+      retry: "Asked a parent — try again",
     },
     auth_failed: {
       title: "AI doesn't recognise you",

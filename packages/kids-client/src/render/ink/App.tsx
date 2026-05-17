@@ -22,6 +22,7 @@ import { CoursePackPicker } from "./screens/CoursePackPicker.tsx"
 import { MissionCompleteScreen } from "./screens/MissionCompleteScreen.tsx"
 import { LoadingScreen } from "./screens/LoadingScreen.tsx"
 import { SetupScreen } from "./screens/SetupScreen.tsx"
+import { TourScreen } from "./screens/TourScreen.tsx"
 import type { ProviderId } from "../../core/setup.ts"
 
 export interface AppDeps {
@@ -44,6 +45,7 @@ export interface AppDeps {
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
   onSetupOAuthHandoff: (provider: ProviderId) => Promise<void>
+  onTourDone: () => void
 }
 
 export function App(deps: AppDeps): React.ReactElement {
@@ -77,6 +79,8 @@ export function App(deps: AppDeps): React.ReactElement {
       return <LoadingScreen locale={deps.locale} message={state.screen.message} />
     case "setup":
       return <SetupScreen locale={deps.locale} onSave={deps.onSetupSave} onContinue={deps.onSetupContinue} onSkip={deps.onSetupSkip} onOAuthHandoff={deps.onSetupOAuthHandoff} />
+    case "tour":
+      return <TourScreen locale={deps.locale} onDone={deps.onTourDone} />
     case "startup":
       return <StartupScreen locale={deps.locale} coursePack={state.coursePack} onStart={deps.onStart} />
     case "mission":

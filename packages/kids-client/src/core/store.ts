@@ -10,6 +10,7 @@
 export type Screen =
   | { kind: "loading"; message?: string }
   | { kind: "setup" }
+  | { kind: "tour" }
   | { kind: "startup" }
   | { kind: "mission" }
   | { kind: "help" }

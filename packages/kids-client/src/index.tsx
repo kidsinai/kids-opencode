@@ -34,6 +34,7 @@ import { App } from "./render/ink/App.tsx"
 import { detectDangerousTopicEn, detectDangerousTopicZh } from "./dangerous-topic-bridge.ts"
 import { OAUTH_HANDOFF_EXIT_CODE, saveSetup, saveSetupOauth, type ProviderId } from "./core/setup.ts"
 import { reloadEnvFile } from "./core/env-reload.ts"
+import { hasSeenTour, markTourSeen } from "./core/tour-marker.ts"
 import type { InstalledPack } from "./core/course-pack.ts"
 import { loadCoursePack } from "@kidsinai/kids-opencode-plugin"
 
@@ -74,6 +75,7 @@ interface AppHandlers {
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
   onSetupOAuthHandoff: (provider: ProviderId) => Promise<void>
+  onTourDone: () => void
 }
 
 async function main(): Promise<void> {
@@ -98,17 +100,24 @@ async function main(): Promise<void> {
   let resolveSetup: (() => void) | null = null
   const setupGate = new Promise<void>((r) => { resolveSetup = r })
 
+  // Same pattern for the first-run welcome tour. Only awaited if we actually
+  // route to it (returning users with valid env skip both setup and tour).
+  let resolveTour: (() => void) | null = null
+  const tourGate = new Promise<void>((r) => { resolveTour = r })
+
   const handlers: AppHandlers = makeHandlers(store, env, servicesHolder, resolveSetupFn => {
     resolveSetup = resolveSetupFn
-  }, () => resolveSetup)
+  }, () => resolveSetup, () => resolveTour)
 
   renderApp(store, env, installedPacks, handlers)
 
   // First validation pass.
   let check = validateEnv(env)
+  let didSetup = false
   if (!check.ok && check.variant === "needs_setup") {
     store.update({ screen: { kind: "setup" } })
     await setupGate
+    didSetup = true
 
     // Re-source env file (the setup wizard wrote it).
     reloadEnvFile(env.configDir)
@@ -120,6 +129,14 @@ async function main(): Promise<void> {
     const variant = check.variant === "needs_setup" ? "auth_failed" : check.variant
     store.update({ screen: { kind: "error", variant, detail: check.reason } })
     return
+  }
+
+  // First-run tour: only fires if the kid just went through setup AND hasn't
+  // seen the tour. Returning users with inherited env vars skip it entirely.
+  if (didSetup && !hasSeenTour(env.configDir)) {
+    store.update({ screen: { kind: "tour" } })
+    await tourGate
+    markTourSeen(env.configDir)
   }
 
   // Bootstrap services in-process. Loading screen is shown while we wait.
@@ -153,6 +170,7 @@ function makeHandlers(
   servicesHolder: { current: ServiceSet | null },
   _setResolveSetup: (fn: (() => void) | null) => void,
   getResolveSetup: () => (() => void) | null,
+  getResolveTour: () => (() => void) | null,
 ): AppHandlers {
   const ifBooted = <A extends unknown[]>(fn: (s: ServiceSet, ...args: A) => unknown) => (...args: A) => {
     const s = servicesHolder.current
@@ -208,6 +226,10 @@ function makeHandlers(
       // Hand the TTY to bin/kids-opencode so it can run
       // `opencode auth login --provider <p>` interactively, then re-exec us.
       process.exit(OAUTH_HANDOFF_EXIT_CODE)
+    },
+    onTourDone: () => {
+      const r = getResolveTour()
+      if (r) r()
     },
   }
 }
@@ -286,7 +308,8 @@ async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSe
       })
     },
     onLlmError: (e) => {
-      store.update({ thinking: false, screen: { kind: "error", variant: "network_down", detail: e.message } })
+      const variant = classifyLlmError(e.message)
+      store.update({ thinking: false, screen: { kind: "error", variant, detail: e.message } })
     },
     onCompactionEnded: () => {
       flashToast(store, {
@@ -560,7 +583,38 @@ function handlePluginAudit(event: unknown, store: Store): void {
     const snap = store.getSnapshot()
     const newBalance = Math.max(0, snap.starsBalance - e.stars_charged)
     store.update({ starsBalance: newBalance })
+    // Preemptive switch the moment the balance lands at zero — kid sees the
+    // friendly "out of stars" screen before the next tool call fails server-side.
+    if (newBalance === 0 && snap.starsBudget > 0 && snap.screen.kind === "mission") {
+      store.update({
+        screen: { kind: "error", variant: "stars_exhausted" },
+        thinking: false,
+      })
+    }
   }
+}
+
+/**
+ * Pattern-match the LLM/plugin error message against known billing failures
+ * so the kid lands on the friendly "out of stars" screen instead of the
+ * generic "network down" one. The plugin / DeepRouter wraps these with
+ * codes like WALLET_INSUFFICIENT / FAMILY_PAUSED (platform-backend §7) or
+ * plain English ("insufficient credits", "rate limit", "402").
+ */
+function classifyLlmError(msg: string): "stars_exhausted" | "network_down" {
+  const m = msg.toLowerCase()
+  if (
+    m.includes("wallet_insufficient")
+    || m.includes("family_paused")
+    || m.includes("insufficient")
+    || m.includes("out of credit")
+    || m.includes("out of stars")
+    || m.includes("quota")
+    || m.includes("402")
+  ) {
+    return "stars_exhausted"
+  }
+  return "network_down"
 }
 
 const TOAST_TTL_MS = 3500

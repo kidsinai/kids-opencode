@@ -20,7 +20,7 @@
 #   8. exec kids-client; kids-client supervises the AI engine.
 set -e
 
-KIDS_OPENCODE_VERSION="0.0.7"
+KIDS_OPENCODE_VERSION="0.0.8"
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
 CONFIG_DIR_WRAPPER="$(dirname "$CONFIG")"
 
