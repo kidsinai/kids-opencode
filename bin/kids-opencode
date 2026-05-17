@@ -20,7 +20,7 @@
 #   8. exec kids-client; kids-client supervises the AI engine.
 set -e
 
-KIDS_OPENCODE_VERSION="0.0.6"
+KIDS_OPENCODE_VERSION="0.0.7"
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
 CONFIG_DIR_WRAPPER="$(dirname "$CONFIG")"
 
@@ -194,6 +194,58 @@ HELPEOF
     exit 0
     ;;
 esac
+
+# ────────────────────────────────────────────────────────────────────────────
+# 3b. Silent auto-update (once per 24h)
+# ────────────────────────────────────────────────────────────────────────────
+# Runs AFTER subcommand dispatch so explicit `--update`, `--version`,
+# `register`, `check`, `--shutdown` are not preempted. Best-effort: any
+# network or installer failure is swallowed so the kid still gets to
+# start coding. Set KIDS_OPENCODE_NO_AUTO_UPDATE=1 to opt out.
+
+CHECK_INTERVAL=86400  # 24h in seconds
+LAST_CHECK_FILE="$CONFIG_DIR_WRAPPER/last-update-check"
+mkdir -p "$CONFIG_DIR_WRAPPER" 2>/dev/null || true
+
+should_check_update() {
+  [ "${KIDS_OPENCODE_NO_AUTO_UPDATE:-0}" = "1" ] && return 1
+  command -v curl >/dev/null 2>&1 || return 1
+  if [ -f "$LAST_CHECK_FILE" ]; then
+    last=$(cat "$LAST_CHECK_FILE" 2>/dev/null || echo 0)
+    [ -z "$last" ] && last=0
+    now=$(date +%s)
+    age=$((now - last))
+    [ "$age" -lt "$CHECK_INTERVAL" ] && return 1
+  fi
+  return 0
+}
+
+if should_check_update; then
+  # Write timestamp first — if update install fails, we still wait 24h
+  # before retrying so we don't bombard npm or interrupt every launch.
+  date +%s > "$LAST_CHECK_FILE" 2>/dev/null || true
+
+  LATEST=$(curl -fsS --max-time 3 https://registry.npmjs.org/@kidsinai/kids-opencode/latest 2>/dev/null \
+    | sed -n 's/.*"version":"\([^"]*\)".*/\1/p' | head -1)
+
+  if [ -n "$LATEST" ] && [ "$LATEST" != "$KIDS_OPENCODE_VERSION" ]; then
+    echo "Kids OpenCode: new version $LATEST available (you have $KIDS_OPENCODE_VERSION). Updating quietly…" >&2
+    UPDATED=0
+    if command -v bun >/dev/null 2>&1; then
+      bun add -g "@kidsinai/kids-opencode@$LATEST" >/dev/null 2>&1 && UPDATED=1
+    elif command -v npm >/dev/null 2>&1; then
+      npm install -g "@kidsinai/kids-opencode@$LATEST" >/dev/null 2>&1 && UPDATED=1
+    fi
+    if [ "$UPDATED" = 1 ]; then
+      echo "Kids OpenCode: ✓ updated to $LATEST" >&2
+      # Re-exec so the just-installed wrapper takes over (kids-client too,
+      # via its updated peer dep). The npm shim still points at the same
+      # path, so $0 is safe to re-invoke.
+      exec "$0" "$@"
+    fi
+    # Quiet on failure — kid still gets to start their session.
+  fi
+fi
 
 # ────────────────────────────────────────────────────────────────────────────
 # 4. AI engine check — gracefully handle missing opencode binary

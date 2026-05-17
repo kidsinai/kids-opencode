@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@kidsinai/kids-opencode",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "type": "module",
   "description": "Kids OpenCode — a kid-safe AI coding mentor (12+). One-command install via `bun add -g @kidsinai/kids-opencode`.",
   "license": "MIT",
