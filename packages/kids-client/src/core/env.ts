@@ -60,14 +60,17 @@ export function validateEnv(env: KidsClientEnv): { ok: true } | { ok: false; rea
   }
   // Accept any supported provider's API key, not just DeepRouter. The
   // setup wizard writes whatever the parent picked into ~/.config/kids-opencode/env
-  // which the wrapper sources before exec. KIDS_OAUTH_PROVIDER marks an
-  // OAuth flow that opencode handles via its own auth.json store —
-  // we trust opencode to gate on actual token validity at serve time.
+  // which the wrapper sources before exec.
+  //
+  // KIDS_OAUTH_PROVIDER was previously trusted as a credential signal —
+  // that was wrong: upstream opencode dropped Anthropic Pro/Max OAuth in
+  // 1.3.0, so the marker existed without a real credential and opencode
+  // silently fell back to its own api-key picker. Users now get re-routed
+  // through SetupScreen until they paste an actual API key.
   const hasAnyKey =
     env.deeprouterApiKey
     || process.env.ANTHROPIC_API_KEY
     || process.env.OPENAI_API_KEY
-    || process.env.KIDS_OAUTH_PROVIDER
   if (!env.bypassGateway && !hasAnyKey) {
     return {
       ok: false,

@@ -20,7 +20,7 @@
 #   8. exec kids-client; kids-client supervises the AI engine.
 set -e
 
-KIDS_OPENCODE_VERSION="0.0.8"
+KIDS_OPENCODE_VERSION="0.0.9"
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
 CONFIG_DIR_WRAPPER="$(dirname "$CONFIG")"
 
@@ -311,24 +311,29 @@ fi
 # 7. Locate kids-client (PATH OR sibling dep)
 # ────────────────────────────────────────────────────────────────────────────
 
-if command -v kids-client >/dev/null 2>&1; then
-  KIDS_CLIENT_BIN="$(command -v kids-client)"
-else
-  for candidate in \
-    "$THIS_DIR/../../kids-client/bin/kids-client" \
-    "$THIS_DIR/../../@kidsinai/kids-client/bin/kids-client" \
-    "$THIS_DIR/../node_modules/@kidsinai/kids-client/bin/kids-client" \
-    "$THIS_DIR/../../../packages/kids-client/bin/kids-client"; do
-    if [ -x "$candidate" ]; then
-      KIDS_CLIENT_BIN="$candidate"
-      break
-    fi
-  done
-  if [ -z "${KIDS_CLIENT_BIN:-}" ]; then
-    echo "Kids OpenCode: kid interface not installed. Reinstall:" >&2
-    echo "  bun add -g @kidsinai/kids-opencode" >&2
-    exit 1
+# Prefer the kids-client bundled inside our own package over a global one
+# on PATH. Otherwise an older standalone `bun add -g @kidsinai/kids-client`
+# silently overrides the version we shipped with this wrapper, and the kid
+# gets a wrapper/client version mismatch (e.g. wrapper has auth_choice +
+# tour wired but the old client doesn't render them).
+KIDS_CLIENT_BIN=""
+for candidate in \
+  "$THIS_DIR/../../kids-client/bin/kids-client" \
+  "$THIS_DIR/../../@kidsinai/kids-client/bin/kids-client" \
+  "$THIS_DIR/../node_modules/@kidsinai/kids-client/bin/kids-client" \
+  "$THIS_DIR/../../../packages/kids-client/bin/kids-client"; do
+  if [ -x "$candidate" ]; then
+    KIDS_CLIENT_BIN="$candidate"
+    break
   fi
+done
+if [ -z "$KIDS_CLIENT_BIN" ] && command -v kids-client >/dev/null 2>&1; then
+  KIDS_CLIENT_BIN="$(command -v kids-client)"
+fi
+if [ -z "$KIDS_CLIENT_BIN" ]; then
+  echo "Kids OpenCode: kid interface not installed. Reinstall:" >&2
+  echo "  bun add -g @kidsinai/kids-opencode" >&2
+  exit 1
 fi
 
 # ────────────────────────────────────────────────────────────────────────────

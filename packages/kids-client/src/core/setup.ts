@@ -24,8 +24,23 @@ export type ProviderId = "anthropic" | "openai" | "deeprouter"
  */
 export const OAUTH_HANDOFF_EXIT_CODE = 123
 
-/** Providers that support OAuth login via the upstream opencode kernel. */
-export const OAUTH_PROVIDERS: ReadonlyArray<ProviderId> = ["anthropic"] as const
+/**
+ * Providers for which upstream opencode currently ships an OAuth/subscription
+ * login method. Anthropic Pro/Max was REMOVED in opencode 1.3.0 — Anthropic's
+ * ToS prohibits using consumer Claude Pro/Max subscriptions through coding
+ * agents like opencode. See:
+ *   ~/Documents/sites/kidsinai/opencode-kernel/packages/web/src/content/docs/providers.mdx
+ *
+ * OpenAI ChatGPT Plus IS supported by upstream and is the obvious next
+ * candidate to wire here — but until that's done, no provider triggers the
+ * auth_choice step and every kid lands directly on the api-key screen.
+ *
+ * The OAuth handoff infrastructure below (OAUTH_HANDOFF_EXIT_CODE,
+ * saveSetupOauth, the wrapper's exit-123 loop, the auth_choice screen) is
+ * intentionally kept inert rather than deleted — flipping OPENAI back on
+ * here when ChatGPT Plus is wired is a one-line revival.
+ */
+export const OAUTH_PROVIDERS: ReadonlyArray<ProviderId> = [] as const
 
 export interface ProviderChoice {
   id: ProviderId
@@ -173,16 +188,16 @@ function writeOpencodeConfig(
 export function hasAnyProviderKey(configDir: string): boolean {
   const env = readEnvFile(join(configDir, "env"))
   if (env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || env.DEEPROUTER_API_KEY) return true
-  // OAuth handoff completed earlier? The marker means opencode has its own
-  // auth.json credentials; opencode itself will gate on actual token validity.
-  if (env.KIDS_OAUTH_PROVIDER) return true
   // Also accept keys present in the parent shell env (advanced users).
   return !!(
     process.env.ANTHROPIC_API_KEY
     || process.env.OPENAI_API_KEY
     || process.env.DEEPROUTER_API_KEY
-    || process.env.KIDS_OAUTH_PROVIDER
   )
+  // Note: KIDS_OAUTH_PROVIDER marker is intentionally NOT accepted anymore.
+  // Users who got stuck with the marker but no actual OAuth credential
+  // (because opencode never had an Anthropic Pro/Max method to begin with)
+  // will be routed back through SetupScreen to pick an API-key flow.
 }
 
 /** Crude check of API key shape — refuses obvious typos. */
