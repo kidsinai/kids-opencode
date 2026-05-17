@@ -88,6 +88,13 @@ export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenP
       else if (key.downArrow) setProviderIdx((i) => Math.min(PROVIDERS.length - 1, i + 1))
       else if (key.return) setStep("apikey")
       else if (key.escape) setStep("intro")
+    } else if (step === "apikey") {
+      // Picked the wrong provider? Esc bounces back to the picker.
+      // (Enter is consumed by TextInput's onSubmit below, so we only need Esc here.)
+      if (key.escape) {
+        setApiKey("")
+        setStep("provider")
+      }
     } else if (step === "done") {
       if (key.return) {
         // Inline boot — no exit.
@@ -243,6 +250,9 @@ export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenP
         <Box marginTop={1}>
           <Text color={theme.fgDim}>{t.apiKeyEnter}</Text>
         </Box>
+        <Box>
+          <Text color={theme.fgDim}>{t.apiKeyBack}</Text>
+        </Box>
       </Box>
     )
   }
@@ -307,6 +317,7 @@ const STRINGS = {
     apiKeyHint: (url: string) => `没 key？打开浏览器：${url}`,
     apiKeyPlaceholder: (env: string) => `${env}（粘进来后按 Enter）`,
     apiKeyEnter: "[Enter] 保存 · 你的 key 只存在本地",
+    apiKeyBack: "[Esc] 选错了？回去重选",
     apiKeyInvalid: (env: string) => `这看起来不是有效的 ${env}。再试一次。`,
     saving: "保存中…",
     errTitle: "出了点问题",
@@ -332,6 +343,7 @@ const STRINGS = {
     apiKeyHint: (url: string) => `Don't have a key yet? Open: ${url}`,
     apiKeyPlaceholder: (env: string) => `${env} (paste then Enter)`,
     apiKeyEnter: "[Enter] save · Your key stays on this machine.",
+    apiKeyBack: "[Esc] Picked wrong one? Go back and re-pick.",
     apiKeyInvalid: (env: string) => `That doesn't look like a valid ${env}. Try again.`,
     saving: "Saving…",
     errTitle: "Something went wrong",
