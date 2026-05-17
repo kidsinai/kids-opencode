@@ -60,11 +60,14 @@ export function validateEnv(env: KidsClientEnv): { ok: true } | { ok: false; rea
   }
   // Accept any supported provider's API key, not just DeepRouter. The
   // setup wizard writes whatever the parent picked into ~/.config/kids-opencode/env
-  // which the wrapper sources before exec.
+  // which the wrapper sources before exec. KIDS_OAUTH_PROVIDER marks an
+  // OAuth flow that opencode handles via its own auth.json store —
+  // we trust opencode to gate on actual token validity at serve time.
   const hasAnyKey =
     env.deeprouterApiKey
     || process.env.ANTHROPIC_API_KEY
     || process.env.OPENAI_API_KEY
+    || process.env.KIDS_OAUTH_PROVIDER
   if (!env.bypassGateway && !hasAnyKey) {
     return {
       ok: false,

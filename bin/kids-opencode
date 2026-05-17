@@ -317,12 +317,71 @@ OPENCODE_SERVER_PASSWORD="$(cat "$PASSWORD_FILE")"
 export OPENCODE_SERVER_PASSWORD
 
 # ────────────────────────────────────────────────────────────────────────────
-# 10. Hand off to kids-client
+# 10. Hand off to kids-client (with OAuth handoff loop)
 # ────────────────────────────────────────────────────────────────────────────
+#
+# kids-client may exit with KIDS_EXIT_CODE_OAUTH (123) to request that we
+# run `opencode auth login --provider <p>` interactively (it needs the
+# TTY, which kids-client's Ink TUI is occupying). The KIDS_OAUTH_PROVIDER
+# env var (written by saveSetupOauth() into the env file) tells us which
+# provider to log into. After OAuth completes, we re-run kids-client; it
+# now finds the credentials in opencode's own auth.json store and boots
+# straight to MissionScreen.
 
 export KIDS_OPENCODE_CONFIG="$CONFIG"
 OPENCODE_BIN="$(command -v opencode)"
 export OPENCODE_BIN
 
-# shellcheck disable=SC2086 # we want word-splitting on FORWARD_ARGS
-exec "$KIDS_CLIENT_BIN" $FORWARD_ARGS
+KIDS_EXIT_CODE_OAUTH=123
+OAUTH_ATTEMPTS=0
+OAUTH_MAX_ATTEMPTS=2
+
+while :; do
+  set +e
+  # shellcheck disable=SC2086 # we want word-splitting on FORWARD_ARGS
+  "$KIDS_CLIENT_BIN" $FORWARD_ARGS
+  RC=$?
+  set -e
+
+  if [ "$RC" -ne "$KIDS_EXIT_CODE_OAUTH" ]; then
+    exit "$RC"
+  fi
+
+  OAUTH_ATTEMPTS=$((OAUTH_ATTEMPTS + 1))
+  if [ "$OAUTH_ATTEMPTS" -gt "$OAUTH_MAX_ATTEMPTS" ]; then
+    echo "Kids OpenCode: too many OAuth handoffs in one run; aborting." >&2
+    exit 1
+  fi
+
+  # Re-source the env file — kids-client just wrote KIDS_OAUTH_PROVIDER.
+  if [ -f "$KIDS_ENV_FILE" ]; then
+    set -a
+    # shellcheck disable=SC1090
+    . "$KIDS_ENV_FILE"
+    set +a
+  fi
+
+  if [ -z "${KIDS_OAUTH_PROVIDER:-}" ]; then
+    echo "Kids OpenCode: OAuth handoff requested but KIDS_OAUTH_PROVIDER is empty." >&2
+    exit 1
+  fi
+
+  cat >&2 <<OAUTHMSG
+
+Kids OpenCode — opening login for $KIDS_OAUTH_PROVIDER…
+
+You're about to see the opencode auth flow take over the screen. Finish
+signing in (a browser tab will open) and we'll pick back up automatically.
+
+OAUTHMSG
+
+  set +e
+  opencode auth login --provider "$KIDS_OAUTH_PROVIDER"
+  AUTH_RC=$?
+  set -e
+
+  if [ "$AUTH_RC" -ne 0 ]; then
+    echo "Kids OpenCode: opencode auth login exited $AUTH_RC. Run kids-opencode again to retry." >&2
+    exit "$AUTH_RC"
+  fi
+done

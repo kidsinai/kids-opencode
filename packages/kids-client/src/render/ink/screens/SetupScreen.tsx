@@ -20,6 +20,7 @@ import { KidsLogo } from "../components/KidsLogo.tsx"
 import {
   findProvider,
   looksLikeApiKey,
+  OAUTH_PROVIDERS,
   PROVIDERS,
   type ProviderId,
 } from "../../../core/setup.ts"
@@ -30,6 +31,8 @@ type Step =
   | "engine_done"
   | "intro"
   | "provider"
+  | "auth_choice"
+  | "oauth_handoff"
   | "apikey"
   | "saving"
   | "done"
@@ -42,14 +45,21 @@ interface SetupScreenProps {
   onContinue: () => Promise<void>
   /** Skip key — useful for advanced users who set env vars themselves. */
   onSkip: () => void
+  /**
+   * Hand off to bin/kids-opencode for `opencode auth login --provider <p>`.
+   * Implementation writes opencode.json + the KIDS_OAUTH_PROVIDER marker,
+   * then process.exit(OAUTH_HANDOFF_EXIT_CODE). Never returns.
+   */
+  onOAuthHandoff: (provider: ProviderId) => Promise<void>
 }
 
-export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenProps): React.ReactElement {
+export function SetupScreen({ locale, onSave, onContinue, onSkip, onOAuthHandoff }: SetupScreenProps): React.ReactElement {
   const theme = getTheme()
   const t = STRINGS[locale]
   const initialStep: Step = hasOpencodeBinary() ? "intro" : "engine_install"
   const [step, setStep] = useState<Step>(initialStep)
   const [providerIdx, setProviderIdx] = useState(0)
+  const [authChoiceIdx, setAuthChoiceIdx] = useState(0)  // 0 = subscription, 1 = api key
   const [apiKey, setApiKey] = useState("")
   const [errorMsg, setErrorMsg] = useState("")
   const [engineLog, setEngineLog] = useState<string[]>([])
@@ -86,8 +96,33 @@ export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenP
     } else if (step === "provider") {
       if (key.upArrow) setProviderIdx((i) => Math.max(0, i - 1))
       else if (key.downArrow) setProviderIdx((i) => Math.min(PROVIDERS.length - 1, i + 1))
-      else if (key.return) setStep("apikey")
+      else if (key.return) {
+        // Anthropic supports both Pro/Max subscription OAuth and API key —
+        // surface the choice. Other providers go straight to api-key input.
+        const picked = PROVIDERS[providerIdx]!
+        if (OAUTH_PROVIDERS.includes(picked.id)) {
+          setAuthChoiceIdx(0)
+          setStep("auth_choice")
+        } else {
+          setStep("apikey")
+        }
+      }
       else if (key.escape) setStep("intro")
+    } else if (step === "auth_choice") {
+      if (key.upArrow) setAuthChoiceIdx((i) => Math.max(0, i - 1))
+      else if (key.downArrow) setAuthChoiceIdx((i) => Math.min(1, i + 1))
+      else if (key.return) {
+        if (authChoiceIdx === 0) {
+          // Pro/Max OAuth — render a brief handoff screen, then exit so
+          // the wrapper can run `opencode auth login` with full TTY.
+          setStep("oauth_handoff")
+          // Fire-and-forget — onOAuthHandoff calls process.exit, never returns.
+          void onOAuthHandoff(PROVIDERS[providerIdx]!.id)
+        } else {
+          setStep("apikey")
+        }
+      }
+      else if (key.escape) setStep("provider")
     } else if (step === "apikey") {
       // Picked the wrong provider? Esc bounces back to the picker.
       // (Enter is consumed by TextInput's onSubmit below, so we only need Esc here.)
@@ -228,6 +263,54 @@ export function SetupScreen({ locale, onSave, onContinue, onSkip }: SetupScreenP
     )
   }
 
+  if (step === "auth_choice") {
+    const choices = t.authChoice.options
+    return (
+      <Box flexDirection="column" borderStyle="double" borderColor={theme.accent} paddingX={2} paddingY={1}>
+        <Text color={theme.accent} bold>{t.authChoice.title(providerObj.label)}</Text>
+        <Box marginTop={1} flexDirection="column">
+          {choices.map((c, i) => {
+            const active = i === authChoiceIdx
+            return (
+              <Box key={i}>
+                <Text color={active ? theme.kid : theme.fg}>{active ? "▶ " : "  "}</Text>
+                <Box flexDirection="column" flexGrow={1}>
+                  <Text color={active ? theme.accent : theme.fg} bold={active}>{c.label}</Text>
+                  <Text color={theme.fgDim} dimColor={!active}>  {c.hint}</Text>
+                </Box>
+              </Box>
+            )
+          })}
+        </Box>
+        <Box marginTop={1}>
+          <Text color={theme.accent}>{t.authChoice.keys}</Text>
+        </Box>
+      </Box>
+    )
+  }
+
+  if (step === "oauth_handoff") {
+    return (
+      <Box flexDirection="column" alignItems="center" paddingY={1}>
+        <KidsLogo />
+        <Box marginTop={2} borderStyle="round" borderColor={theme.accent} paddingX={2} paddingY={1} flexDirection="column">
+          <Box>
+            <Text color={theme.accent}>
+              <Spinner type="dots" />
+            </Text>
+            <Text color={theme.accent} bold> {t.oauthHandoff.title}</Text>
+          </Box>
+          <Box marginTop={1}>
+            <Text color={theme.fgDim}>{t.oauthHandoff.line1}</Text>
+          </Box>
+          <Box>
+            <Text color={theme.fgDim}>{t.oauthHandoff.line2}</Text>
+          </Box>
+        </Box>
+      </Box>
+    )
+  }
+
   if (step === "apikey") {
     const steps = t.providerSteps[provider.id]
     return (
@@ -339,6 +422,25 @@ const STRINGS = {
     providerTitle: "选一个 AI 服务",
     providerKeys: "[↑↓] 选 · [Enter] 下一步 · [Esc] 返回",
     getKey: "去拿 key",
+    authChoice: {
+      title: (label: string) => `${label} 怎么用？`,
+      keys: "[↑↓] 选 · [Enter] 确认 · [Esc] 返回",
+      options: [
+        {
+          label: "用我的 Claude Pro/Max 订阅（推荐）",
+          hint: "不用 API key、不用充值；用现有 claude.ai 账号一键登录",
+        },
+        {
+          label: "用 API key（按量计费 ~$5/月）",
+          hint: "公司账号、没订阅、或想分账时选这个",
+        },
+      ],
+    },
+    oauthHandoff: {
+      title: "正在让 Claude 登录接管屏幕…",
+      line1: "马上会跳出浏览器让你登录 claude.ai 账号。",
+      line2: "登录完后我会自动接回来，给孩子继续。",
+    },
     apiKeyTitle: (label: string) => `输入 ${label} 的 API key`,
     apiKeyHint: (url: string) => `没 key？打开浏览器：${url}`,
     apiKeyPlaceholder: (env: string) => `${env}（粘进来后按 Enter）`,
@@ -389,6 +491,25 @@ const STRINGS = {
     providerTitle: "Pick an AI service",
     providerKeys: "[↑↓] choose · [Enter] next · [Esc] back",
     getKey: "Get key at",
+    authChoice: {
+      title: (label: string) => `How will you connect to ${label}?`,
+      keys: "[↑↓] choose · [Enter] confirm · [Esc] back",
+      options: [
+        {
+          label: "Use my Claude Pro/Max subscription (recommended)",
+          hint: "No API key, no top-up — sign in with your existing claude.ai account",
+        },
+        {
+          label: "Use an API key (pay-as-you-go ~$5/month)",
+          hint: "Pick this for company accounts, no subscription, or separate billing",
+        },
+      ],
+    },
+    oauthHandoff: {
+      title: "Handing off to Claude login…",
+      line1: "A browser window will open to sign in to your claude.ai account.",
+      line2: "I'll pick back up automatically once you're done.",
+    },
     apiKeyTitle: (label: string) => `Enter your ${label} API key`,
     apiKeyHint: (url: string) => `Don't have a key yet? Open: ${url}`,
     apiKeyPlaceholder: (env: string) => `${env} (paste then Enter)`,

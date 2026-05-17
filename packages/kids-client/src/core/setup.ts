@@ -16,6 +16,17 @@ import { dirname, join } from "node:path"
 
 export type ProviderId = "anthropic" | "openai" | "deeprouter"
 
+/**
+ * Wire protocol between SetupScreen and bin/kids-opencode wrapper:
+ * kids-client exits with this code to ask the wrapper to run
+ * `opencode auth login --provider <p>` (interactive OAuth that needs the
+ * TTY), then re-exec kids-client. See bin/kids-opencode §11 loop.
+ */
+export const OAUTH_HANDOFF_EXIT_CODE = 123
+
+/** Providers that support OAuth login via the upstream opencode kernel. */
+export const OAUTH_PROVIDERS: ReadonlyArray<ProviderId> = ["anthropic"] as const
+
 export interface ProviderChoice {
   id: ProviderId
   label: string
@@ -93,12 +104,54 @@ export function saveSetup(opts: SaveOptions): void {
   const envPath = join(opts.configDir, "env")
   const existing = readEnvFile(envPath)
   existing[provider.envVar] = opts.apiKey
+  // If the user previously chose OAuth and is now switching to API key, drop
+  // the marker so validateEnv doesn't keep routing through OAuth handoff.
+  delete existing.KIDS_OAUTH_PROVIDER
   writeEnvFile(envPath, existing)
 
   // 2. Rewrite opencode.json provider section.
-  const configPath = join(opts.configDir, "opencode.json")
+  writeOpencodeConfig(opts.configDir, provider, { withApiKey: true })
+}
+
+export interface SaveOauthOptions {
+  configDir: string
+  provider: ProviderId
+}
+
+/**
+ * Stage the OAuth handoff. We write opencode.json without an apiKey block
+ * (opencode reads OAuth tokens from its own auth.json), drop any stale
+ * provider API keys, and write a KIDS_OAUTH_PROVIDER marker so the
+ * wrapper knows which provider to log into. The actual
+ * `opencode auth login --provider <p>` invocation happens in
+ * bin/kids-opencode after kids-client exits with OAUTH_HANDOFF_EXIT_CODE.
+ */
+export function saveSetupOauth(opts: SaveOauthOptions): void {
+  const provider = findProvider(opts.provider)
+  ensureConfigDir(opts.configDir)
+
+  // 1. Update env file: clear this provider's API key (avoid stale leakage),
+  //    set marker pointing at the OAuth provider.
+  const envPath = join(opts.configDir, "env")
+  const existing = readEnvFile(envPath)
+  delete existing[provider.envVar]
+  existing.KIDS_OAUTH_PROVIDER = opts.provider
+  writeEnvFile(envPath, existing)
+
+  // 2. opencode.json without apiKey — opencode uses its auth.json store.
+  writeOpencodeConfig(opts.configDir, provider, { withApiKey: false })
+}
+
+function writeOpencodeConfig(
+  configDir: string,
+  provider: ProviderChoice,
+  flags: { withApiKey: boolean },
+): void {
+  const configPath = join(configDir, "opencode.json")
   const config = readJsonOrEmpty(configPath)
-  config.provider = provider.config(provider.envVar)
+  config.provider = flags.withApiKey
+    ? provider.config(provider.envVar)
+    : { [provider.id]: {} }
   config.model = provider.defaultModel
   if (!config.permission) {
     config.permission = {
@@ -120,11 +173,15 @@ export function saveSetup(opts: SaveOptions): void {
 export function hasAnyProviderKey(configDir: string): boolean {
   const env = readEnvFile(join(configDir, "env"))
   if (env.ANTHROPIC_API_KEY || env.OPENAI_API_KEY || env.DEEPROUTER_API_KEY) return true
+  // OAuth handoff completed earlier? The marker means opencode has its own
+  // auth.json credentials; opencode itself will gate on actual token validity.
+  if (env.KIDS_OAUTH_PROVIDER) return true
   // Also accept keys present in the parent shell env (advanced users).
   return !!(
     process.env.ANTHROPIC_API_KEY
     || process.env.OPENAI_API_KEY
     || process.env.DEEPROUTER_API_KEY
+    || process.env.KIDS_OAUTH_PROVIDER
   )
 }
 

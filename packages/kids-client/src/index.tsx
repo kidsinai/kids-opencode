@@ -32,7 +32,7 @@ import { readLastSession, writeLastSession } from "./core/last-session.ts"
 import { isCompletionTrigger, runCheck } from "./core/check-runner.ts"
 import { App } from "./render/ink/App.tsx"
 import { detectDangerousTopicEn, detectDangerousTopicZh } from "./dangerous-topic-bridge.ts"
-import { saveSetup, type ProviderId } from "./core/setup.ts"
+import { OAUTH_HANDOFF_EXIT_CODE, saveSetup, saveSetupOauth, type ProviderId } from "./core/setup.ts"
 import { reloadEnvFile } from "./core/env-reload.ts"
 import type { InstalledPack } from "./core/course-pack.ts"
 import { loadCoursePack } from "@kidsinai/kids-opencode-plugin"
@@ -73,6 +73,7 @@ interface AppHandlers {
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
+  onSetupOAuthHandoff: (provider: ProviderId) => Promise<void>
 }
 
 async function main(): Promise<void> {
@@ -196,6 +197,17 @@ function makeHandlers(
     onSetupSkip: () => {
       const r = getResolveSetup()
       if (r) r()
+    },
+    onSetupOAuthHandoff: async (provider) => {
+      try {
+        saveSetupOauth({ configDir: env.configDir, provider })
+      } catch (err) {
+        console.error("kids-client: OAuth handoff prep failed:", err)
+        process.exit(1)
+      }
+      // Hand the TTY to bin/kids-opencode so it can run
+      // `opencode auth login --provider <p>` interactively, then re-exec us.
+      process.exit(OAUTH_HANDOFF_EXIT_CODE)
     },
   }
 }
