@@ -31,11 +31,13 @@ const SPARKLE_ROW_BOTTOM = "    ⭐      ✦        ⭐       ✦       "
 
 export function KidsLogo(): React.ReactElement {
   const theme = getTheme()
-  // Colors approximate the brand logo. Use "Bright" variants so dark terminals pop.
-  const cK = "cyanBright"
-  const cI = "yellow"
-  const cD = "greenBright"
-  const cS = "magentaBright"
+  // Theme-driven — DARK uses cyanBright/yellow/greenBright/magentaBright,
+  // LIGHT swaps to non-Bright variants (blue/yellow/green/magenta) that
+  // hold contrast on white macOS Terminal default.
+  const cK = theme.logoK
+  const cI = theme.logoI
+  const cD = theme.logoD
+  const cS = theme.logoS
   const gap = "  " // 2-col gap between letters
   return (
     <Box flexDirection="column" alignItems="center">
