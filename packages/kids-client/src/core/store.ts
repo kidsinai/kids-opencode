@@ -28,6 +28,7 @@ export type Screen =
 
 export type ErrorVariant =
   | "serve_unreachable"
+  | "port_taken"
   | "network_down"
   | "stars_exhausted"
   | "auth_failed"

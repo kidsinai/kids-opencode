@@ -71,6 +71,11 @@ const STRINGS = {
       body: "后台 AI 服务好像没启动。要不要再试一次？",
       retry: "重试",
     },
+    port_taken: {
+      title: "另一个 AI 老师还在占着位子",
+      body: "请家长打开终端，跑一下：\n\n  kids-opencode --shutdown\n\n然后按 Enter 再试。",
+      retry: "已经关掉了，再试",
+    },
     network_down: {
       title: "网络有点问题",
       body: "我没办法连上 AI。等会儿再来，或者问家长检查网络。",
@@ -103,6 +108,11 @@ const STRINGS = {
       title: "AI teacher didn't start",
       body: "The background AI service isn't running. Try again?",
       retry: "Retry",
+    },
+    port_taken: {
+      title: "Another AI teacher is still holding the seat",
+      body: "Ask a parent to open a terminal and run:\n\n  kids-opencode --shutdown\n\nThen press Enter to try again.",
+      retry: "Done — try again",
     },
     network_down: {
       title: "Network trouble",

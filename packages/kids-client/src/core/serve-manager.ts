@@ -14,7 +14,20 @@ import { spawn, type Subprocess } from "bun"
 export type ServeReadiness =
   | { kind: "already_running" }
   | { kind: "spawned"; pid: number }
+  // Someone else is holding the port (TCP accepts) but our password doesn't
+  // unlock /app. Usually a stale `opencode serve` from a previous run with a
+  // different OPENCODE_SERVER_PASSWORD. Telling the kid to retry won't help —
+  // they need to free the port (`kids-opencode --shutdown`).
+  | { kind: "port_taken_auth_mismatch"; port: string }
+  // We spawned a child but it exited before becoming ready (e.g. EADDRINUSE,
+  // missing config). exitCode/stderr surface the real cause instead of
+  // making the kid wait 10s for a generic timeout.
+  | { kind: "spawn_failed"; exitCode: number | null; stderrTail: string }
   | { kind: "timeout"; lastError: string }
+
+/** Tri-state probe result; lets ensureReady() distinguish "nobody home"
+ *  from "someone's home but won't let me in". */
+export type ProbeResult = "ok" | "auth_mismatch" | "offline"
 
 export interface ServeManagerOptions {
   baseUrl: string
@@ -31,17 +44,30 @@ export interface ServeManagerOptions {
 export class ServeManager {
   private child: Subprocess | null = null
   private opts: ServeManagerOptions
+  // Recent stderr lines from the spawned child, used for spawn_failed
+  // diagnostics. Bounded so it doesn't grow unbounded over a long session.
+  private stderrTail: string[] = []
+  private static STDERR_TAIL_MAX = 20
 
   constructor(opts: ServeManagerOptions) {
     this.opts = opts
   }
 
   /**
-   * Probe baseUrl. If already up, no-op. Otherwise spawn `opencode serve`
-   * as a child, hook stderr parsing, poll until /app responds 200.
+   * Probe baseUrl. If already up, no-op. If something else holds the port
+   * with a different password, return port_taken_auth_mismatch (don't try
+   * to spawn — bind would just fail with EADDRINUSE). Otherwise spawn
+   * `opencode serve`, hook stderr parsing, and race the readiness poll
+   * against the child's exit so port conflicts surface in <1s instead of
+   * timing out after 10s.
    */
   async ensureReady(): Promise<ServeReadiness> {
-    if (await this.probe()) return { kind: "already_running" }
+    const initial = await this.probe()
+    if (initial === "ok") return { kind: "already_running" }
+    if (initial === "auth_mismatch") {
+      const url = new URL(this.opts.baseUrl)
+      return { kind: "port_taken_auth_mismatch", port: url.port || "4096" }
+    }
 
     const url = new URL(this.opts.baseUrl)
     const proc = spawn({
@@ -61,9 +87,19 @@ export class ServeManager {
     const start = Date.now()
     let lastError = "no response"
     while (Date.now() - start < timeout) {
-      if (await this.probe()) return { kind: "spawned", pid: proc.pid ?? -1 }
+      // If the child died on its own (bind failure, bad args), don't keep
+      // polling — surface the exit immediately with whatever stderr we got.
+      if (proc.exitCode !== null) {
+        return {
+          kind: "spawn_failed",
+          exitCode: proc.exitCode,
+          stderrTail: this.stderrTail.join("\n"),
+        }
+      }
+      const status = await this.probe()
+      if (status === "ok") return { kind: "spawned", pid: proc.pid ?? -1 }
       await new Promise((r) => setTimeout(r, 200))
-      lastError = "still booting"
+      lastError = status === "auth_mismatch" ? "auth mismatch on /app" : "still booting"
     }
     return { kind: "timeout", lastError }
   }
@@ -77,17 +113,20 @@ export class ServeManager {
     this.child = null
   }
 
-  /** GET /app with Basic Auth. Returns true on 200. */
-  private async probe(): Promise<boolean> {
+  /** GET /app with Basic Auth.
+   *  200 → "ok"; 401/403 → "auth_mismatch" (port owned by another instance
+   *  whose password differs); anything else (network refused, 5xx, timeout)
+   *  → "offline". */
+  private async probe(): Promise<ProbeResult> {
     try {
       const res = await fetch(`${this.opts.baseUrl}/app`, {
         headers: {
           authorization: "Basic " + btoa(`:${this.opts.serverPassword}`),
         },
       })
-      return res.ok
+      return classifyProbeStatus(res.status)
     } catch {
-      return false
+      return "offline"
     }
   }
 
@@ -112,9 +151,22 @@ export class ServeManager {
   private handleLine(line: string): void {
     if (!line) return
     const audit = parseAuditLine(line)
-    if (audit) this.opts.onAuditLine?.(audit)
-    else this.opts.onDebugLine?.(line)
+    if (audit) {
+      this.opts.onAuditLine?.(audit)
+      return
+    }
+    this.stderrTail.push(line)
+    if (this.stderrTail.length > ServeManager.STDERR_TAIL_MAX) {
+      this.stderrTail.shift()
+    }
+    this.opts.onDebugLine?.(line)
   }
+}
+
+export function classifyProbeStatus(status: number): ProbeResult {
+  if (status >= 200 && status < 300) return "ok"
+  if (status === 401 || status === 403) return "auth_mismatch"
+  return "offline"
 }
 
 export function parseAuditLine(line: string): unknown | null {

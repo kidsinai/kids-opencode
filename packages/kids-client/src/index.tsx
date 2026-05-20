@@ -254,6 +254,26 @@ async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSe
   })
 
   const readiness = await serve.ensureReady()
+  if (readiness.kind === "port_taken_auth_mismatch") {
+    store.update({
+      screen: {
+        kind: "error",
+        variant: "port_taken",
+        detail: `port ${readiness.port} held by another opencode serve`,
+      },
+    })
+    return null
+  }
+  if (readiness.kind === "spawn_failed") {
+    store.update({
+      screen: {
+        kind: "error",
+        variant: "serve_unreachable",
+        detail: `opencode serve exited (${readiness.exitCode}): ${readiness.stderrTail || "no stderr"}`,
+      },
+    })
+    return null
+  }
   if (readiness.kind === "timeout") {
     store.update({ screen: { kind: "error", variant: "serve_unreachable", detail: readiness.lastError } })
     return null
@@ -491,7 +511,23 @@ function makeFullHandlers(
         },
       })
       const again = await serve.ensureReady()
-      if (again.kind === "timeout") {
+      if (again.kind === "port_taken_auth_mismatch") {
+        store.update({
+          screen: {
+            kind: "error",
+            variant: "port_taken",
+            detail: `port ${again.port} held by another opencode serve`,
+          },
+        })
+      } else if (again.kind === "spawn_failed") {
+        store.update({
+          screen: {
+            kind: "error",
+            variant: "serve_unreachable",
+            detail: `opencode serve exited (${again.exitCode}): ${again.stderrTail || "no stderr"}`,
+          },
+        })
+      } else if (again.kind === "timeout") {
         store.update({ screen: { kind: "error", variant: "serve_unreachable", detail: again.lastError } })
       } else {
         store.update({ screen: { kind: "startup" } })
