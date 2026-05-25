@@ -4,6 +4,8 @@
 
 **Status**: 🟡 V0 in development (Phase 1 done, Phase 2 in progress). **Not yet safe for actual kids**; see [`PLAN.md`](./PLAN.md) for what's left.
 
+![Kids OpenCode startup screen](docs/screenshots/startup-screen.png)
+
 ---
 
 ## What it is
