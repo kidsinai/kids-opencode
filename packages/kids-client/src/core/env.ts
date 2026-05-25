@@ -14,6 +14,13 @@ export interface KidsClientEnv {
   opencodeBaseUrl: string
   /** HTTP Basic Auth password for serve. Mandatory. */
   opencodeServerPassword: string
+  /**
+   * HTTP Basic Auth *username* for serve. Defaults to "opencode" to match
+   * upstream's `OPENCODE_SERVER_USERNAME` default (opencode-kernel
+   * packages/opencode/src/server/auth.ts) — sending an empty username here
+   * causes a 401 against opencode ≥1.x even when the password is correct.
+   */
+  opencodeServerUsername: string
   /** DeepRouter tenant key. May be empty when using BYOK bypass. */
   deeprouterApiKey: string
   /** True if the wrapper set KIDS_LLM_BYPASS_GATEWAY=1 (BYOK dogfood mode). */
@@ -39,6 +46,7 @@ export function readEnv(): KidsClientEnv {
   return {
     opencodeBaseUrl: process.env.OPENCODE_BASE_URL ?? "http://127.0.0.1:4096",
     opencodeServerPassword: password,
+    opencodeServerUsername: process.env.OPENCODE_SERVER_USERNAME || "opencode",
     deeprouterApiKey: process.env.DEEPROUTER_API_KEY ?? "",
     bypassGateway: process.env.KIDS_LLM_BYPASS_GATEWAY === "1",
     coursePack: process.env.KIDS_COURSE_PACK || null,

@@ -10,6 +10,7 @@
  */
 
 import { spawn, type Subprocess } from "bun"
+import { buildAuthHeader } from "./connection.ts"
 
 export type ServeReadiness =
   | { kind: "already_running" }
@@ -32,6 +33,13 @@ export type ProbeResult = "ok" | "auth_mismatch" | "offline"
 export interface ServeManagerOptions {
   baseUrl: string
   serverPassword: string
+  /**
+   * Must match upstream's `OPENCODE_SERVER_USERNAME` (default "opencode").
+   * The probe sends this as the Basic-auth username — upstream's
+   * authorized() requires an exact match, so an empty username produces
+   * a 401 even when the password is correct.
+   */
+  serverUsername: string
   opencodeBin: string
   /** Max wait for readiness probe in ms. Default 10s. */
   readyTimeoutMs?: number
@@ -75,6 +83,7 @@ export class ServeManager {
       env: {
         ...process.env,
         OPENCODE_SERVER_PASSWORD: this.opts.serverPassword,
+        OPENCODE_SERVER_USERNAME: this.opts.serverUsername,
       },
       stdout: "pipe",
       stderr: "pipe",
@@ -121,7 +130,7 @@ export class ServeManager {
     try {
       const res = await fetch(`${this.opts.baseUrl}/app`, {
         headers: {
-          authorization: "Basic " + btoa(`:${this.opts.serverPassword}`),
+          authorization: buildAuthHeader(this.opts.serverUsername, this.opts.serverPassword),
         },
       })
       return classifyProbeStatus(res.status)

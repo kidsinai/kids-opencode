@@ -42,6 +42,16 @@ describe("readEnv", () => {
     process.env.KIDS_LLM_BYPASS_GATEWAY = "1"
     expect(readEnv().bypassGateway).toBe(true)
   })
+
+  test("opencodeServerUsername defaults to 'opencode' to match upstream", () => {
+    delete process.env.OPENCODE_SERVER_USERNAME
+    expect(readEnv().opencodeServerUsername).toBe("opencode")
+  })
+
+  test("opencodeServerUsername honors OPENCODE_SERVER_USERNAME override", () => {
+    process.env.OPENCODE_SERVER_USERNAME = "kids"
+    expect(readEnv().opencodeServerUsername).toBe("kids")
+  })
 })
 
 describe("validateEnv", () => {
@@ -49,6 +59,7 @@ describe("validateEnv", () => {
     const result = validateEnv({
       opencodeBaseUrl: "http://127.0.0.1:4096",
       opencodeServerPassword: "",
+      opencodeServerUsername: "opencode",
       deeprouterApiKey: "key",
       bypassGateway: false,
       coursePack: null,
@@ -66,6 +77,7 @@ describe("validateEnv", () => {
     const result = validateEnv({
       opencodeBaseUrl: "http://127.0.0.1:4096",
       opencodeServerPassword: "pw",
+      opencodeServerUsername: "opencode",
       deeprouterApiKey: "",
       bypassGateway: false,
       coursePack: null,
@@ -83,6 +95,7 @@ describe("validateEnv", () => {
     const result = validateEnv({
       opencodeBaseUrl: "http://127.0.0.1:4096",
       opencodeServerPassword: "pw",
+      opencodeServerUsername: "opencode",
       deeprouterApiKey: "",
       bypassGateway: true,
       coursePack: null,

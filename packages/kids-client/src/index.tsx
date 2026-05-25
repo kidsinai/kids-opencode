@@ -262,6 +262,7 @@ async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSe
   const serve = new ServeManager({
     baseUrl: env.opencodeBaseUrl,
     serverPassword: env.opencodeServerPassword,
+    serverUsername: env.opencodeServerUsername,
     opencodeBin: env.opencodeBin,
     onAuditLine: (event) => {
       audit.push(event)
@@ -299,6 +300,7 @@ async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSe
   const client = createKidsClient({
     baseUrl: env.opencodeBaseUrl,
     serverPassword: env.opencodeServerPassword,
+    serverUsername: env.opencodeServerUsername,
   })
   const session = new SessionManager(client)
 
