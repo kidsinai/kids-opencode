@@ -20,7 +20,9 @@
 #   8. exec kids-client; kids-client supervises the AI engine.
 set -e
 
-KIDS_OPENCODE_VERSION="0.0.12"
+# KIDS_OPENCODE_VERSION is derived from the sibling package.json after
+# THIS_DIR is resolved (see "2. Resolve symlink" below) — hard-coding it
+# here would drift from package.json every release.
 CONFIG="${KIDS_OPENCODE_CONFIG:-$HOME/.config/kids-opencode/opencode.json}"
 CONFIG_DIR_WRAPPER="$(dirname "$CONFIG")"
 
@@ -61,6 +63,12 @@ while [ -L "$RESOLVED" ]; do
   esac
 done
 THIS_DIR=$(cd "$(dirname "$RESOLVED")" && pwd)
+
+# Derive version from the package.json that ships with this wrapper, so
+# `--version` and the auto-update check always agree with the installed
+# tarball. `sed` is portable (jq is not guaranteed on every kid's box).
+KIDS_OPENCODE_VERSION=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$THIS_DIR/../package.json" 2>/dev/null | head -1)
+KIDS_OPENCODE_VERSION="${KIDS_OPENCODE_VERSION:-unknown}"
 
 # ────────────────────────────────────────────────────────────────────────────
 # 3. Subcommand dispatch (before flag parsing)
