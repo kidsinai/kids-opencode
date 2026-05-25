@@ -111,6 +111,16 @@ Product code consumes opencode via npm (`@opencode-ai/sdk`, `@opencode-ai/plugin
 - **`Airbotix-AI/platform-backend`** — issues per-family DeepRouter API keys, stores parental consent records, persists audit log. The `Airbotix-AI/airbotix-app` SPA is the parent-facing portal that surfaces all of this.
 - **`Airbotix-AI/airbotix`** — marketing site, hosts `airbotix.ai/install/kids` and public compliance docs.
 
+## Backed by
+
+<p align="center">
+  <a href="https://www.airbotix.ai/"><img src="docs/brand/airbotix.png" alt="Airbotix" height="56" /></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.unisq.edu.au/"><img src="docs/brand/usq.webp" alt="University of Southern Queensland" height="56" /></a>
+</p>
+
+Kids OpenCode is built by **Airbotix** in formal collaboration with the **University of Southern Queensland (UniSQ)** and **CSIRO** (via the RUIC program). The CSIRO logo will be added once the brand pack is received from the program team.
+
 ## License
 
 MIT — same as upstream opencode. Repo is currently private; will go public alongside V0 launch.
