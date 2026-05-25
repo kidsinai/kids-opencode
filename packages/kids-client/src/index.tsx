@@ -64,6 +64,7 @@ interface AppHandlers {
   onPermissionReply: (decision: "allow" | "deny" | "edit") => void
   onDangerousAcknowledge: () => void
   onErrorRetry: () => void | Promise<void>
+  onReconfigure: () => void
   onQuit: () => void | Promise<void>
   onAbort: () => void
   onHelpBack: () => void
@@ -189,6 +190,12 @@ function makeHandlers(
       // Pre-boot error retry: re-run main isn't trivial; just exit.
       process.exit(1)
     },
+    onReconfigure: () => {
+      // From an error screen, jump into the setup wizard so the parent can
+      // change provider / paste a new API key. onSetupContinue knows whether
+      // we're in first-run (resolve gate) or post-boot (reload env + retry).
+      store.update({ screen: { kind: "setup" } })
+    },
     onQuit: async () => {
       const s = servicesHolder.current
       if (s) return s.quit()
@@ -211,6 +218,16 @@ function makeHandlers(
     onSetupContinue: async () => {
       const r = getResolveSetup()
       if (r) r()
+      // Post-boot reconfigure path: services are already up but the env they
+      // were booted with is stale. Re-source the env file (the wizard wrote
+      // it) and replay the same recovery as [Enter] Retry on the error
+      // screen — push the loading screen and re-run readiness probe.
+      const s = servicesHolder.current
+      if (s) {
+        reloadEnvFile(env.configDir)
+        Object.assign(env, readEnv())
+        await s.handlers.onErrorRetry()
+      }
     },
     onSetupSkip: () => {
       const r = getResolveSetup()

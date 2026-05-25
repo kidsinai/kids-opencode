@@ -21,12 +21,20 @@ interface ErrorScreenProps {
   detail?: string
   onRetry?: () => void
   onQuit?: () => void
+  /**
+   * Open the setup wizard so the parent can change provider / paste a new
+   * API key. Wired by AppDeps only for config-related variants
+   * (serve_unreachable / port_taken / auth_failed / config_missing) — retry
+   * alone won't fix a wrong key.
+   */
+  onReconfigure?: () => void
 }
 
-export function ErrorScreen({ variant, locale, detail, onRetry, onQuit }: ErrorScreenProps): React.ReactElement {
+export function ErrorScreen({ variant, locale, detail, onRetry, onQuit, onReconfigure }: ErrorScreenProps): React.ReactElement {
   const theme = getTheme()
   useInput((input, key) => {
     if (key.return && onRetry) onRetry()
+    else if ((input === "c" || input === "C") && onReconfigure) onReconfigure()
     else if (input === "q" && onQuit) onQuit()
   })
   const t = STRINGS[locale][variant]
@@ -52,6 +60,12 @@ export function ErrorScreen({ variant, locale, detail, onRetry, onQuit }: ErrorS
             <Text color={theme.fg}> {t.retry}</Text>
           </Box>
         )}
+        {onReconfigure && (
+          <Box marginRight={2}>
+            <Text color={theme.accent}>[c]</Text>
+            <Text color={theme.fg}> {STRINGS[locale].reconfigure}</Text>
+          </Box>
+        )}
         {onQuit && (
           <Box>
             <Text color={theme.accent}>[q]</Text>
@@ -66,6 +80,7 @@ export function ErrorScreen({ variant, locale, detail, onRetry, onQuit }: ErrorS
 const STRINGS = {
   "zh-Hans": {
     quit: "退出",
+    reconfigure: "改设置（换 key / 换 provider）",
     serve_unreachable: {
       title: "AI 老师还没起来",
       body: "后台 AI 服务好像没启动。要不要再试一次？",
@@ -104,6 +119,7 @@ const STRINGS = {
   },
   en: {
     quit: "Quit",
+    reconfigure: "Change settings (switch key / provider)",
     serve_unreachable: {
       title: "AI teacher didn't start",
       body: "The background AI service isn't running. Try again?",

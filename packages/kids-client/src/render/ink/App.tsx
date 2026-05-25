@@ -11,7 +11,7 @@
 
 import React, { useSyncExternalStore } from "react"
 import type { InstalledPack } from "../../core/course-pack.ts"
-import type { Store } from "../../core/store.ts"
+import type { ErrorVariant, Store } from "../../core/store.ts"
 import { StartupScreen } from "./screens/StartupScreen.tsx"
 import { MissionScreen } from "./screens/MissionScreen.tsx"
 import { PermissionModal } from "./screens/PermissionModal.tsx"
@@ -25,6 +25,17 @@ import { SetupScreen } from "./screens/SetupScreen.tsx"
 import { TourScreen } from "./screens/TourScreen.tsx"
 import type { ProviderId } from "../../core/setup.ts"
 
+// Variants where the root cause may be a stale / wrong API key or a missing
+// provider config — showing a [c] Change settings option that opens the setup
+// wizard actually helps. Pure runtime/network problems (network_down,
+// stars_exhausted, ai_hung) are excluded; they need a different recovery.
+const RECONFIGURABLE_VARIANTS: ReadonlySet<ErrorVariant> = new Set([
+  "serve_unreachable",
+  "port_taken",
+  "auth_failed",
+  "config_missing",
+])
+
 export interface AppDeps {
   store: Store
   locale: "zh-Hans" | "en"
@@ -34,6 +45,11 @@ export interface AppDeps {
   onPermissionReply: (decision: "allow" | "deny" | "edit") => void
   onDangerousAcknowledge: () => void
   onErrorRetry: () => void
+  /**
+   * Jump from the error screen into the setup wizard. Only wired for
+   * config-related variants — see RECONFIGURABLE_VARIANTS below.
+   */
+  onReconfigure: () => void
   onQuit: () => void
   onAbort: () => void
   onHelpBack: () => void
@@ -117,6 +133,7 @@ export function App(deps: AppDeps): React.ReactElement {
           detail={state.screen.detail}
           locale={deps.locale}
           onRetry={deps.onErrorRetry}
+          onReconfigure={RECONFIGURABLE_VARIANTS.has(state.screen.variant) ? deps.onReconfigure : undefined}
           onQuit={deps.onQuit}
         />
       )
