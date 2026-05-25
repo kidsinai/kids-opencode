@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/brand/logo.png" alt="Kids OpenCode logo" width="320" />
+</p>
+
 # Kids OpenCode
 
 > A kid-safe **command-line** AI coding mentor for kids 12+. Built on [opencode](https://github.com/anomalyco/opencode) (MIT).
