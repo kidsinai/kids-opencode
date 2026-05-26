@@ -114,11 +114,11 @@ Product code consumes opencode via npm (`@opencode-ai/sdk`, `@opencode-ai/plugin
 ## Backed by
 
 <p align="center">
-  <a href="https://www.airbotix.ai/"><img src="docs/brand/airbotix.png" alt="Airbotix" height="56" /></a>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.unisq.edu.au/"><img src="docs/brand/usq.webp" alt="University of Southern Queensland" height="56" /></a>
-  &nbsp;&nbsp;&nbsp;&nbsp;
-  <a href="https://www.csiro.au/"><img src="docs/brand/csiro.svg" alt="CSIRO" height="56" /></a>
+  <a href="https://www.airbotix.ai/"><img src="docs/brand/airbotix.png" alt="Airbotix" height="100" /></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.unisq.edu.au/"><img src="docs/brand/usq.webp" alt="University of Southern Queensland" height="100" /></a>
+  &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://www.csiro.au/"><img src="docs/brand/csiro.svg" alt="CSIRO" height="100" /></a>
 </p>
 
 Kids OpenCode is built by **Airbotix** in formal collaboration with the **University of Southern Queensland (UniSQ)** and **CSIRO** (via the RUIC program).
