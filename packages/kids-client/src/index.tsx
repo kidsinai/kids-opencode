@@ -37,6 +37,7 @@ import { reloadEnvFile } from "./core/env-reload.ts"
 import { hasSeenTour, markTourSeen } from "./core/tour-marker.ts"
 import type { InstalledPack } from "./core/course-pack.ts"
 import { loadCoursePack } from "@kidsinai/kids-opencode-plugin"
+import { buildWalletUrl, getOrCreateDeviceId, openInBrowser } from "./core/wallet-link.ts"
 
 interface ServiceSet {
   audit: AuditPipeline
@@ -77,6 +78,7 @@ interface AppHandlers {
   onSetupSkip: () => void
   onSetupOAuthHandoff: (provider: ProviderId) => Promise<void>
   onTourDone: () => void
+  onOpenWallet: () => void
 }
 
 async function main(): Promise<void> {
@@ -247,6 +249,25 @@ function makeHandlers(
     onTourDone: () => {
       const r = getResolveTour()
       if (r) r()
+    },
+    onOpenWallet: () => {
+      const deviceId = getOrCreateDeviceId(env.configDir)
+      const url = buildWalletUrl({
+        portalBaseUrl: env.portalBaseUrl,
+        deviceId,
+        locale: env.locale,
+      })
+      const result = openInBrowser(url)
+      const okText = env.locale === "zh-Hans"
+        ? `已在浏览器打开：${url}`
+        : `Opened in your browser: ${url}`
+      const failText = env.locale === "zh-Hans"
+        ? `没办法自动开浏览器。请手动打开：${url}`
+        : `Couldn't auto-open the browser. Open manually: ${url}`
+      flashToast(store, {
+        kind: result.ok ? "success" : "warn",
+        text: result.ok ? okText : failText,
+      })
     },
   }
 }

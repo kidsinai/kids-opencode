@@ -52,6 +52,16 @@ describe("readEnv", () => {
     process.env.OPENCODE_SERVER_USERNAME = "kids"
     expect(readEnv().opencodeServerUsername).toBe("kids")
   })
+
+  test("portalBaseUrl defaults to https://app.airbotix.ai", () => {
+    delete process.env.AIRBOTIX_PORTAL_URL
+    expect(readEnv().portalBaseUrl).toBe("https://app.airbotix.ai")
+  })
+
+  test("portalBaseUrl honors AIRBOTIX_PORTAL_URL override", () => {
+    process.env.AIRBOTIX_PORTAL_URL = "https://staging.airbotix.ai"
+    expect(readEnv().portalBaseUrl).toBe("https://staging.airbotix.ai")
+  })
 })
 
 describe("validateEnv", () => {
@@ -68,6 +78,7 @@ describe("validateEnv", () => {
       opencodeBin: "opencode",
       configDir: "/tmp/cfg",
       noBanner: false,
+      portalBaseUrl: "https://app.airbotix.ai",
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.variant).toBe("config_missing")
@@ -86,6 +97,7 @@ describe("validateEnv", () => {
       opencodeBin: "opencode",
       configDir: "/tmp/cfg",
       noBanner: false,
+      portalBaseUrl: "https://app.airbotix.ai",
     })
     expect(result.ok).toBe(false)
     if (!result.ok) expect(result.variant).toBe("needs_setup")
@@ -104,6 +116,7 @@ describe("validateEnv", () => {
       opencodeBin: "opencode",
       configDir: "/tmp/cfg",
       noBanner: false,
+      portalBaseUrl: "https://app.airbotix.ai",
     })
     expect(result.ok).toBe(true)
   })

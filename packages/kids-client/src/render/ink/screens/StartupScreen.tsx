@@ -5,6 +5,7 @@
  *   Enter → start a free-play session OR continue if a course pack is set
  *   c     → choose a Course Pack
  *   r     → resume the last session
+ *   w     → open Airbotix Portal wallet / login in the parent's browser
  *   h     → show kid-friendly help
  */
 
@@ -13,19 +14,23 @@ import { Box, Text, useInput } from "ink"
 import { getTheme } from "../theme.ts"
 import { KidsLogo } from "../components/KidsLogo.tsx"
 import { KeyHints } from "../components/KeyHints.tsx"
+import { Toast, type ToastState } from "../components/Toast.tsx"
 
 interface StartupScreenProps {
   locale: "zh-Hans" | "en"
   coursePack: string | null
+  toast: ToastState | null
   onStart: (mode: "free" | "course" | "resume" | "help") => void
+  onOpenWallet: () => void
 }
 
-export function StartupScreen({ locale, coursePack, onStart }: StartupScreenProps): React.ReactElement {
+export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet }: StartupScreenProps): React.ReactElement {
   const theme = getTheme()
   useInput((input, key) => {
     if (key.return) onStart(coursePack ? "course" : "free")
     else if (input === "c") onStart("course")
     else if (input === "r") onStart("resume")
+    else if (input === "w" || input === "W") onOpenWallet()
     else if (input === "h") onStart("help")
   })
   const t = STRINGS[locale]
@@ -51,9 +56,15 @@ export function StartupScreen({ locale, coursePack, onStart }: StartupScreenProp
           { key: "Enter", label: coursePack ? t.startCourse : t.startFree },
           { key: "c", label: t.pickCourse },
           { key: "r", label: t.resume },
+          { key: "w", label: t.wallet },
           { key: "h", label: t.help },
         ]} />
       </Box>
+      {toast && (
+        <Box marginTop={1}>
+          <Toast toast={toast} />
+        </Box>
+      )}
     </Box>
   )
 }
@@ -70,6 +81,7 @@ const STRINGS = {
     startCourse: "继续 Course Pack",
     pickCourse: "选 Course Pack",
     resume: "继续上次",
+    wallet: "钱包 / 充值（开浏览器）",
     help: "帮助",
   },
   en: {
@@ -83,6 +95,7 @@ const STRINGS = {
     startCourse: "Continue Course Pack",
     pickCourse: "Pick a Course Pack",
     resume: "Resume last session",
+    wallet: "Wallet / Top up (opens browser)",
     help: "Help",
   },
 } as const

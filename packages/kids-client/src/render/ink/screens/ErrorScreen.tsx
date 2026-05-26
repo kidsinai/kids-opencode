@@ -14,11 +14,13 @@ import React from "react"
 import { Box, Text, useInput } from "ink"
 import { getTheme } from "../theme.ts"
 import type { ErrorVariant } from "../../../core/store.ts"
+import { Toast, type ToastState } from "../components/Toast.tsx"
 
 interface ErrorScreenProps {
   variant: ErrorVariant
   locale: "zh-Hans" | "en"
   detail?: string
+  toast?: ToastState | null
   onRetry?: () => void
   onQuit?: () => void
   /**
@@ -28,13 +30,20 @@ interface ErrorScreenProps {
    * alone won't fix a wrong key.
    */
   onReconfigure?: () => void
+  /**
+   * Open the Airbotix Portal wallet page in the parent's default browser.
+   * Wired only for `stars_exhausted` so retry-alone (which won't change the
+   * balance) is not the only option.
+   */
+  onOpenWallet?: () => void
 }
 
-export function ErrorScreen({ variant, locale, detail, onRetry, onQuit, onReconfigure }: ErrorScreenProps): React.ReactElement {
+export function ErrorScreen({ variant, locale, detail, toast, onRetry, onQuit, onReconfigure, onOpenWallet }: ErrorScreenProps): React.ReactElement {
   const theme = getTheme()
   useInput((input, key) => {
     if (key.return && onRetry) onRetry()
     else if ((input === "c" || input === "C") && onReconfigure) onReconfigure()
+    else if ((input === "w" || input === "W") && onOpenWallet) onOpenWallet()
     else if (input === "q" && onQuit) onQuit()
   })
   const t = STRINGS[locale][variant]
@@ -66,6 +75,12 @@ export function ErrorScreen({ variant, locale, detail, onRetry, onQuit, onReconf
             <Text color={theme.fg}> {STRINGS[locale].reconfigure}</Text>
           </Box>
         )}
+        {onOpenWallet && (
+          <Box marginRight={2}>
+            <Text color={theme.accent}>[w]</Text>
+            <Text color={theme.fg}> {STRINGS[locale].topUp}</Text>
+          </Box>
+        )}
         {onQuit && (
           <Box>
             <Text color={theme.accent}>[q]</Text>
@@ -73,6 +88,11 @@ export function ErrorScreen({ variant, locale, detail, onRetry, onQuit, onReconf
           </Box>
         )}
       </Box>
+      {toast && (
+        <Box marginTop={1}>
+          <Toast toast={toast} />
+        </Box>
+      )}
     </Box>
   )
 }
@@ -81,6 +101,7 @@ const STRINGS = {
   "zh-Hans": {
     quit: "退出",
     reconfigure: "改设置（换 key / 换 provider）",
+    topUp: "去充值（开浏览器）",
     serve_unreachable: {
       title: "AI 老师还没起来",
       body: "后台 AI 服务好像没启动。要不要再试一次？",
@@ -98,7 +119,7 @@ const STRINGS = {
     },
     stars_exhausted: {
       title: "今天的 ⭐ 用完了",
-      body: "今天先到这里啦！\n你做得很好，我们明天接着来。\n或者找家长打开 airbotix.ai/portal/wallet 多充一点 ⭐，然后按 Enter 接着做。",
+      body: "今天先到这里啦！\n你做得很好，我们明天接着来。\n或者按 [w] 让家长去充值，回来按 Enter 接着做。",
       retry: "找完家长了，再试一次",
     },
     auth_failed: {
@@ -120,6 +141,7 @@ const STRINGS = {
   en: {
     quit: "Quit",
     reconfigure: "Change settings (switch key / provider)",
+    topUp: "Top up (opens browser)",
     serve_unreachable: {
       title: "AI teacher didn't start",
       body: "The background AI service isn't running. Try again?",
@@ -137,7 +159,7 @@ const STRINGS = {
     },
     stars_exhausted: {
       title: "Out of ⭐ for today",
-      body: "Great work today!\nWe'll pick this up tomorrow.\nOr ask a parent to top up at airbotix.ai/portal/wallet, then press Enter to keep going.",
+      body: "Great work today!\nWe'll pick this up tomorrow.\nOr press [w] so a parent can top up, then press Enter to keep going.",
       retry: "Asked a parent — try again",
     },
     auth_failed: {

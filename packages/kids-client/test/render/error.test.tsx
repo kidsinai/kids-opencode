@@ -15,14 +15,39 @@ describe("ErrorScreen", () => {
     expect(lastFrame() ?? "").toContain("AI 老师还没起来")
   })
 
-  test("stars_exhausted variant links to portal", () => {
+  test("stars_exhausted variant guides to [w] top-up", () => {
     const { lastFrame } = render(
       React.createElement(ErrorScreen, {
         variant: "stars_exhausted",
         locale: "en",
       }),
     )
-    expect(lastFrame() ?? "").toContain("airbotix.ai/portal/wallet")
+    expect(lastFrame() ?? "").toContain("[w]")
+  })
+
+  test("[w] Top up button appears for stars_exhausted when onOpenWallet is passed", () => {
+    const { lastFrame } = render(
+      React.createElement(ErrorScreen, {
+        variant: "stars_exhausted",
+        locale: "en",
+        onRetry: () => {},
+        onOpenWallet: () => {},
+      }),
+    )
+    const frame = lastFrame() ?? ""
+    expect(frame).toContain("[w]")
+    expect(frame).toContain("Top up")
+  })
+
+  test("[w] Top up button is hidden when onOpenWallet omitted (non-stars variant)", () => {
+    const { lastFrame } = render(
+      React.createElement(ErrorScreen, {
+        variant: "network_down",
+        locale: "en",
+        onRetry: () => {},
+      }),
+    )
+    expect(lastFrame() ?? "").not.toContain("Top up")
   })
 
   test("all 7 variants render without crash", () => {

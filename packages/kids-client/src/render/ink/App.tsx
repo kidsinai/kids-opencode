@@ -62,6 +62,13 @@ export interface AppDeps {
   onSetupSkip: () => void
   onSetupOAuthHandoff: (provider: ProviderId) => Promise<void>
   onTourDone: () => void
+  /**
+   * Open the Airbotix Portal wallet/login page in the parent's default
+   * browser. Wired into [w] on StartupScreen and into the
+   * `stars_exhausted` ErrorScreen so parents can top up without
+   * remembering the URL.
+   */
+  onOpenWallet: () => void
 }
 
 export function App(deps: AppDeps): React.ReactElement {
@@ -98,7 +105,7 @@ export function App(deps: AppDeps): React.ReactElement {
     case "tour":
       return <TourScreen locale={deps.locale} onDone={deps.onTourDone} />
     case "startup":
-      return <StartupScreen locale={deps.locale} coursePack={state.coursePack} onStart={deps.onStart} />
+      return <StartupScreen locale={deps.locale} coursePack={state.coursePack} toast={state.toast} onStart={deps.onStart} onOpenWallet={deps.onOpenWallet} />
     case "mission":
       return <MissionScreen state={state} locale={deps.locale} onPrompt={deps.onPrompt} onAbort={deps.onAbort} />
     case "help":
@@ -132,8 +139,10 @@ export function App(deps: AppDeps): React.ReactElement {
           variant={state.screen.variant}
           detail={state.screen.detail}
           locale={deps.locale}
+          toast={state.toast}
           onRetry={deps.onErrorRetry}
           onReconfigure={RECONFIGURABLE_VARIANTS.has(state.screen.variant) ? deps.onReconfigure : undefined}
+          onOpenWallet={state.screen.variant === "stars_exhausted" ? deps.onOpenWallet : undefined}
           onQuit={deps.onQuit}
         />
       )

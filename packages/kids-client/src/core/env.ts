@@ -37,6 +37,12 @@ export interface KidsClientEnv {
   configDir: string
   /** When true, the client renders a "Tony banner" / suppresses interactive prompts (CI). */
   noBanner: boolean
+  /**
+   * Airbotix Portal base URL — used by the [w] Wallet / Top-up shortcut to
+   * deep-link parents into login + Airwallex top-up. Defaults to
+   * https://app.airbotix.ai; staging overrides via AIRBOTIX_PORTAL_URL.
+   */
+  portalBaseUrl: string
 }
 
 export function readEnv(): KidsClientEnv {
@@ -55,6 +61,7 @@ export function readEnv(): KidsClientEnv {
     opencodeBin: process.env.OPENCODE_BIN ?? "opencode",
     configDir: process.env.KIDS_OPENCODE_CONFIG_DIR ?? join(homedir(), ".config", "kids-opencode"),
     noBanner: process.env.KIDS_OPENCODE_NO_BANNER === "1",
+    portalBaseUrl: process.env.AIRBOTIX_PORTAL_URL || "https://app.airbotix.ai",
   }
 }
 
