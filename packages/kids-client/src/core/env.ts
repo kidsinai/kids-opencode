@@ -29,6 +29,10 @@ export interface KidsClientEnv {
   coursePack: string | null
   /** Optional mission id (e.g. "mission-1"). */
   mission: string | null
+  /** Optional guided-flow vibe id picked by the kid (e.g. "space"). */
+  vibeId: string | null
+  /** Optional kid-chosen project name. Surfaced in scaffold template vars. */
+  projectName: string | null
   /** Locale hint ("zh-Hans" / "en"). Picked from KIDS_LOCALE or $LANG. */
   locale: "zh-Hans" | "en"
   /** Path to opencode binary so client can spawn `opencode serve`. */
@@ -57,6 +61,8 @@ export function readEnv(): KidsClientEnv {
     bypassGateway: process.env.KIDS_LLM_BYPASS_GATEWAY === "1",
     coursePack: process.env.KIDS_COURSE_PACK || null,
     mission: process.env.KIDS_MISSION || null,
+    vibeId: process.env.KIDS_VIBE_ID || null,
+    projectName: process.env.KIDS_PROJECT_NAME || null,
     locale,
     opencodeBin: process.env.OPENCODE_BIN ?? "opencode",
     configDir: process.env.KIDS_OPENCODE_CONFIG_DIR ?? join(homedir(), ".config", "kids-opencode"),

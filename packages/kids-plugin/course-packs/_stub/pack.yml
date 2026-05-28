@@ -1,0 +1,35 @@
+# Stub Course Pack — public, mechanism-only.
+#
+# Purpose: exercise the schema + scaffold-renderer codepaths in CI when the
+# private kids-flows submodule isn't checked out. Not shown in the kid-facing
+# picker (directories starting with `_` are filtered in
+# packages/kids-client/src/core/course-pack.ts listInstalledPacks()).
+#
+# Do not put real curriculum content here — that lives in the private submodule.
+
+id: _stub
+version: 0.0.1
+title: "Stub pack (CI fixture)"
+short_description: "Mechanism-only pack used in CI. Not for kids."
+type_category: website
+icon: "🧪"
+picker_label: "(stub — should not appear in picker)"
+picker_order: 9999
+
+missions:
+  - id: mission-1
+    title: "Stub mission"
+    file: mission-1/brief.md
+    acceptance: mission-1/acceptance.yml
+
+system_prompt_overlay: |
+  This is the stub pack used by CI. No real curriculum behaviour.
+
+guided_flow:
+  one_sentence_prompt: "Tell me in one sentence what you want to make."
+  first_5_min_skill: hello
+  vibes:
+    - id: test-mono
+      label: "Mono test"
+      palette: ["#000000", "#ffffff", "#888888"]
+      font: "system-ui"

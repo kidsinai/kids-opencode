@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>${PROJECT_NAME}</title>
+    <style>
+      body { background: ${VIBE_PALETTE_BG}; color: ${VIBE_PALETTE_FG}; font-family: ${VIBE_FONT}; }
+      .accent { color: ${VIBE_PALETTE_ACCENT}; }
+    </style>
+  </head>
+  <body>
+    <h1>Hello, <span class="accent">${PROJECT_NAME}</span>.</h1>
+  </body>
+</html>

@@ -127,6 +127,23 @@ describe("tool whitelist enforcement", () => {
       ),
     ).rejects.toThrow()
   })
+
+  test("Design A canary: skill mechanism MUST NOT have added a new tool", async () => {
+    // The project-types / skill-template work (X.1a + X.1b) chose Design A
+    // (template-based, no new tool) over Design B (new `kids.scaffold` tool).
+    // This test fails the next time someone tries to wire a new tool through
+    // the plugin without going back to docs/safety-assessment.md.
+    const hooks = await server(PLUGIN_INPUT)
+    const before = hooks["tool.execute.before"]!
+    for (const tool of ["kids.scaffold", "scaffold", "kids_scaffold"]) {
+      await expect(
+        before(
+          { tool, sessionID: "s1", callID: "c1" },
+          { args: {} },
+        ),
+      ).rejects.toThrow(/not allowed in V0/)
+    }
+  })
 })
 
 describe("Stars cost estimation", () => {

@@ -1,0 +1,10 @@
+mission_id: mission-1
+title: "Stub mission"
+checks:
+  - id: stub_index_exists
+    description: "index.html exists in the project folder"
+    type: file_exists
+    path: "index.html"
+
+completion_message: |
+  Stub mission complete. This message is never shown to a kid.

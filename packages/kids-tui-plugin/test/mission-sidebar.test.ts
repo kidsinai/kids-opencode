@@ -14,11 +14,11 @@ describe("buildMissionSidebarLine", () => {
     expect(line.text).toContain("unknown pack")
   })
 
-  test("portfolio-site without mission shows pack title fallback", () => {
+  test("legacy portfolio-site id (aliased to website) without mission shows pack title fallback", () => {
     const line = buildMissionSidebarLine({ packId: "portfolio-site" })
     expect(line.visible).toBe(true)
-    // Course Pack from the sibling kids-opencode-plugin's bundled packs.
-    expect(line.text.toLowerCase()).toContain("portfolio")
+    // portfolio-site aliases to the renamed `website` pack (title "A website about you").
+    expect(line.text.toLowerCase()).toContain("website")
   })
 
   test("portfolio-site with a known mission shows N/M format", () => {

@@ -125,41 +125,38 @@ p {
     expect(result.ok).toBe(true)
   })
 
-  test("Mission 3 detects either addEventListener OR onclick wiring", () => {
-    writeFileSync(
-      join(projectDir, "index.html"),
-      `<html><head><link rel="stylesheet" href="style.css"></head>
-<body><h1>Hi</h1><button id="btn">click me</button>
-<script src="script.js"></script></body></html>`,
-    )
-    writeFileSync(join(projectDir, "style.css"), `body { color: red; font-family: Arial; }`)
-    // onclick form
-    writeFileSync(
-      join(projectDir, "script.js"),
-      `document.getElementById('btn').onclick = function () { alert('hi'); };`,
-    )
-    const r1 = runMissionChecks("mission-3", {
-      packId: "portfolio-site",
-      projectDir,
-    })
+  test("Mission 3 detects inline JS wiring (onclick OR addEventListener)", () => {
+    // Website Mission 3 is now single-file: HTML + inline <script>. Acceptance
+    // checks index.html for an interactive element + JS wiring, not a separate
+    // script.js. Sample needs ≥700 chars to clear the substance check.
+    const padding = "<p>A bit about me and the things I like to make and do.</p>".repeat(8)
+    const onclickPage = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Me</title>
+<style>body{font-family:system-ui;background:#fff;color:#111}</style></head>
+<body><h1>My site</h1>${padding}
+<button id="btn">Switch theme</button>
+<script>document.getElementById('btn').onclick = function () { document.body.classList.toggle('dark'); };</script>
+</body></html>`
+    writeFileSync(join(projectDir, "index.html"), onclickPage)
+    const r1 = runMissionChecks("mission-3", { packId: "portfolio-site", projectDir })
     expect("error" in r1).toBe(false)
     if ("error" in r1) return
-    // not necessarily all passes (Mission 2 dependencies might miss) but the event-listener check passes:
-    const evtCheck = r1.results.find((r) => r.id === "script_has_event_listener")
-    expect(evtCheck?.status).toBe("pass")
+    expect(r1.results.find((r) => r.id === "index_html_has_js_wiring")?.status).toBe("pass")
+    expect(r1.results.find((r) => r.id === "index_html_has_interactive_element")?.status).toBe("pass")
 
-    // addEventListener form
-    writeFileSync(
-      join(projectDir, "script.js"),
-      `document.getElementById('btn').addEventListener('click', () => alert('hi'));`,
-    )
-    const r2 = runMissionChecks("mission-3", {
-      packId: "portfolio-site",
-      projectDir,
-    })
+    // addEventListener + localStorage form (guestbook style)
+    const guestbookPage = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Me</title></head>
+<body><h1>My site</h1>${padding}
+<input id="msg"><button id="save">Save</button><ul id="list"></ul>
+<script>
+document.getElementById('save').addEventListener('click', () => {
+  localStorage.setItem('m', document.getElementById('msg').value);
+});
+</script></body></html>`
+    writeFileSync(join(projectDir, "index.html"), guestbookPage)
+    const r2 = runMissionChecks("mission-3", { packId: "portfolio-site", projectDir })
     if ("error" in r2) return
-    const evtCheck2 = r2.results.find((r) => r.id === "script_has_event_listener")
-    expect(evtCheck2?.status).toBe("pass")
+    expect(r2.results.find((r) => r.id === "index_html_has_js_wiring")?.status).toBe("pass")
+    expect(r2.ok).toBe(true)
   })
 
   test("refuses path traversal in mission id", () => {

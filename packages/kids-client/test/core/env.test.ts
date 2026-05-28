@@ -36,6 +36,22 @@ describe("readEnv", () => {
     expect(env.mission).toBe("mission-1")
   })
 
+  test("propagates KIDS_VIBE_ID / KIDS_PROJECT_NAME", () => {
+    process.env.KIDS_VIBE_ID = "space"
+    process.env.KIDS_PROJECT_NAME = "My cool game"
+    const env = readEnv()
+    expect(env.vibeId).toBe("space")
+    expect(env.projectName).toBe("My cool game")
+  })
+
+  test("vibeId / projectName default to null when unset", () => {
+    delete process.env.KIDS_VIBE_ID
+    delete process.env.KIDS_PROJECT_NAME
+    const env = readEnv()
+    expect(env.vibeId).toBeNull()
+    expect(env.projectName).toBeNull()
+  })
+
   test("bypassGateway only true on exact '1'", () => {
     process.env.KIDS_LLM_BYPASS_GATEWAY = "true"
     expect(readEnv().bypassGateway).toBe(false)
@@ -74,6 +90,8 @@ describe("validateEnv", () => {
       bypassGateway: false,
       coursePack: null,
       mission: null,
+      vibeId: null,
+      projectName: null,
       locale: "en",
       opencodeBin: "opencode",
       configDir: "/tmp/cfg",
@@ -93,6 +111,8 @@ describe("validateEnv", () => {
       bypassGateway: false,
       coursePack: null,
       mission: null,
+      vibeId: null,
+      projectName: null,
       locale: "en",
       opencodeBin: "opencode",
       configDir: "/tmp/cfg",
@@ -112,6 +132,8 @@ describe("validateEnv", () => {
       bypassGateway: true,
       coursePack: null,
       mission: null,
+      vibeId: null,
+      projectName: null,
       locale: "en",
       opencodeBin: "opencode",
       configDir: "/tmp/cfg",
