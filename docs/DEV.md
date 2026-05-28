@@ -58,6 +58,28 @@ Test files:
 - `test/system-prompt.test.ts` — kid-safe system prompt invariants
 - `test/plugin.test.ts` — tool whitelist, webfetch allowlist, Stars cost
 - `test/course-pack.test.ts` — pack.yml loader + overlay builder
+- `test/skills.test.ts` — scaffold template renderer + variable bag
+
+## Course pack content lives in a private submodule
+
+Production course packs (the Game pack, the Website pack, the vibe palettes,
+the kid-friendly system-prompt overlays) live in the **private** `kidsinai/kids-flows`
+GitHub repo, mounted as a git submodule at `packages/kids-plugin/course-packs/private/`.
+You will not see that directory after a fresh clone unless you have access to the
+private repo.
+
+The plugin code, the schema, the picker UI, and the scaffold template renderer
+all live here in the public repo — that's the *mechanism*. The *content* is the IP.
+
+If you have access to the private repo, run after clone:
+
+```bash
+git submodule update --init --recursive
+```
+
+If you don't, no worries — the plugin still builds and runs against the public
+`course-packs/_stub/` pack (a CI fixture used to exercise schema + renderer code
+paths). All tests pass without the submodule mounted.
 - `test/acceptance.test.ts` — end-to-end Mission completion verification
 
 ## Run the acceptance runner against a sample project
