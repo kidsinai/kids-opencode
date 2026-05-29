@@ -3,6 +3,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { runMissionChecks } from "../src/acceptance"
+import { loadCoursePack } from "../src/course-pack"
+
+// Website acceptance content lives in the private kids-flows submodule.
+// Website-specific Mission tests skip in public CI (no submodule); generic
+// runner-plumbing tests use the public `_stub` pack instead.
+const HAS_PRIVATE = loadCoursePack("website") !== null
 
 describe("acceptance runner", () => {
   let projectDir: string
@@ -30,15 +36,16 @@ describe("acceptance runner", () => {
 
   test("reports usage error for non-existent mission in valid pack", () => {
     const result = runMissionChecks("mission-999", {
-      packId: "portfolio-site",
+      packId: "_stub",
       projectDir,
     })
     expect("error" in result).toBe(true)
   })
 
-  test("empty project folder fails Mission 1", () => {
+  test("empty project folder fails a mission (file_exists check)", () => {
+    // Uses the public _stub pack so this runs in public CI without the submodule.
     const result = runMissionChecks("mission-1", {
-      packId: "portfolio-site",
+      packId: "_stub",
       projectDir,
     })
     expect("error" in result).toBe(false)
@@ -47,7 +54,16 @@ describe("acceptance runner", () => {
     expect(result.failed).toBeGreaterThan(0)
   })
 
-  test("Mission 1 passes when index.html with full structure is present", () => {
+  test("_stub mission passes once index.html exists (runner plumbing)", () => {
+    writeFileSync(join(projectDir, "index.html"), "<!DOCTYPE html><html><body><h1>Hi</h1></body></html>")
+    const result = runMissionChecks("mission-1", { packId: "_stub", projectDir })
+    expect("error" in result).toBe(false)
+    if ("error" in result) return
+    expect(result.failed).toBe(0)
+    expect(result.ok).toBe(true)
+  })
+
+  test.skipIf(!HAS_PRIVATE)("Mission 1 passes when index.html with full structure is present", () => {
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Test</title></head>
@@ -70,7 +86,7 @@ describe("acceptance runner", () => {
     expect(result.ok).toBe(true)
   })
 
-  test("Mission 2 fails without style.css and link", () => {
+  test.skipIf(!HAS_PRIVATE)("Mission 2 fails without style.css and link", () => {
     writeFileSync(
       join(projectDir, "index.html"),
       "<html><body><h1>Hi</h1></body></html>",
@@ -84,7 +100,7 @@ describe("acceptance runner", () => {
     expect(result.failed).toBeGreaterThan(0)
   })
 
-  test("Mission 2 passes with linked stylesheet using common CSS properties", () => {
+  test.skipIf(!HAS_PRIVATE)("Mission 2 passes with linked stylesheet using common CSS properties", () => {
     writeFileSync(
       join(projectDir, "index.html"),
       `<html><head><link rel="stylesheet" href="style.css"></head><body><h1>Hi</h1></body></html>`,
@@ -125,7 +141,7 @@ p {
     expect(result.ok).toBe(true)
   })
 
-  test("Mission 3 detects inline JS wiring (onclick OR addEventListener)", () => {
+  test.skipIf(!HAS_PRIVATE)("Mission 3 detects inline JS wiring (onclick OR addEventListener)", () => {
     // Website Mission 3 is now single-file: HTML + inline <script>. Acceptance
     // checks index.html for an interactive element + JS wiring, not a separate
     // script.js. Sample needs ≥700 chars to clear the substance check.
@@ -161,7 +177,7 @@ document.getElementById('save').addEventListener('click', () => {
 
   test("refuses path traversal in mission id", () => {
     const result = runMissionChecks("../etc/passwd", {
-      packId: "portfolio-site",
+      packId: "_stub",
       projectDir,
     })
     expect("error" in result).toBe(true)

@@ -1,5 +1,11 @@
 import { describe, expect, test, afterEach } from "bun:test"
 import { buildMissionSidebarLine, readMissionContextFromEnv } from "../src/mission-sidebar.ts"
+import { loadCoursePack } from "@kidsinai/kids-opencode-plugin"
+
+// Pack content (website / game) lives in the private kids-flows submodule.
+// Tests that read real pack metadata (mission counts, Stars budget, title)
+// skip in public CI where the submodule isn't checked out.
+const HAS_PRIVATE = loadCoursePack("website") !== null
 
 describe("buildMissionSidebarLine", () => {
   test("invisible when no Course Pack is active", () => {
@@ -14,20 +20,20 @@ describe("buildMissionSidebarLine", () => {
     expect(line.text).toContain("unknown pack")
   })
 
-  test("legacy portfolio-site id (aliased to website) without mission shows pack title fallback", () => {
+  test.skipIf(!HAS_PRIVATE)("legacy portfolio-site id (aliased to website) without mission shows pack title fallback", () => {
     const line = buildMissionSidebarLine({ packId: "portfolio-site" })
     expect(line.visible).toBe(true)
     // portfolio-site aliases to the renamed `website` pack (title "A website about you").
     expect(line.text.toLowerCase()).toContain("website")
   })
 
-  test("portfolio-site with a known mission shows N/M format", () => {
+  test.skipIf(!HAS_PRIVATE)("portfolio-site with a known mission shows N/M format", () => {
     const line = buildMissionSidebarLine({ packId: "portfolio-site", missionId: "mission-2" })
     expect(line.visible).toBe(true)
     expect(line.text).toContain("Mission 2/3")
   })
 
-  test("includes Stars usage when starsConsumed provided", () => {
+  test.skipIf(!HAS_PRIVATE)("includes Stars usage when starsConsumed provided", () => {
     const line = buildMissionSidebarLine({
       packId: "portfolio-site",
       missionId: "mission-1",
@@ -37,7 +43,7 @@ describe("buildMissionSidebarLine", () => {
     expect(line.text).toContain("12/40")
   })
 
-  test("falls back to 'budget X' when starsConsumed missing", () => {
+  test.skipIf(!HAS_PRIVATE)("falls back to 'budget X' when starsConsumed missing", () => {
     const line = buildMissionSidebarLine({
       packId: "portfolio-site",
       missionId: "mission-1",
@@ -45,7 +51,7 @@ describe("buildMissionSidebarLine", () => {
     expect(line.text).toContain("budget 40")
   })
 
-  test("rounds fractional starsConsumed", () => {
+  test.skipIf(!HAS_PRIVATE)("rounds fractional starsConsumed", () => {
     const line = buildMissionSidebarLine({
       packId: "portfolio-site",
       missionId: "mission-1",

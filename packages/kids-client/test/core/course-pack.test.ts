@@ -1,8 +1,13 @@
 import { describe, expect, test } from "bun:test"
 import { listInstalledPacks, resolveContext } from "../../src/core/course-pack.ts"
 
+// Real packs (website / game) live in the private kids-flows submodule, which
+// isn't checked out in public CI. Content-specific tests skip there; structural
+// tests (sorting, underscore-hiding) run regardless.
+const HAS_PRIVATE = resolveContext("website", null) !== null
+
 describe("listInstalledPacks", () => {
-  test("includes the bundled website pack", () => {
+  test.skipIf(!HAS_PRIVATE)("includes the bundled website pack", () => {
     const packs = listInstalledPacks()
     const website = packs.find((p) => p.id === "website")
     expect(website).toBeDefined()
@@ -10,7 +15,7 @@ describe("listInstalledPacks", () => {
     expect(website?.title.length).toBeGreaterThan(0)
   })
 
-  test("surfaces icon / pickerLabel / typeCategory / pickerOrder from pack.yml", () => {
+  test.skipIf(!HAS_PRIVATE)("surfaces icon / pickerLabel / typeCategory / pickerOrder from pack.yml", () => {
     const packs = listInstalledPacks()
     const website = packs.find((p) => p.id === "website")
     expect(website).toBeDefined()
@@ -45,7 +50,7 @@ describe("resolveContext", () => {
     expect(resolveContext("nonexistent-pack-xyz", null)).toBeNull()
   })
 
-  test("resolves website with mission-1 to index 1", () => {
+  test.skipIf(!HAS_PRIVATE)("resolves website with mission-1 to index 1", () => {
     const ctx = resolveContext("website", "mission-1")
     expect(ctx).not.toBeNull()
     expect(ctx?.packTitle.length).toBeGreaterThan(0)
@@ -54,13 +59,13 @@ describe("resolveContext", () => {
     expect(ctx?.missionTitle).not.toBeNull()
   })
 
-  test("legacy portfolio-site id still resolves via alias", () => {
+  test.skipIf(!HAS_PRIVATE)("legacy portfolio-site id still resolves via alias", () => {
     const ctx = resolveContext("portfolio-site", "mission-1")
     expect(ctx).not.toBeNull()
     expect(ctx?.missionIndex).toBe(1)
   })
 
-  test("returns null mission/title when missionId not provided", () => {
+  test.skipIf(!HAS_PRIVATE)("returns null mission/title when missionId not provided", () => {
     const ctx = resolveContext("website", null)
     expect(ctx).not.toBeNull()
     expect(ctx?.missionIndex).toBeNull()

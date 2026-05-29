@@ -1,8 +1,22 @@
 import { describe, expect, test } from "bun:test"
 import { loadCoursePack, buildOverlay, findMission, type CoursePack } from "../src/course-pack"
 
+// Course-pack curriculum content (website / game) lives in the private
+// kids-flows submodule. In public CI (and fork PRs) that submodule isn't
+// checked out, so content-specific tests are skipped there and run locally
+// + in the publish workflow. Mechanism tests use the public `_stub` fixture.
+const HAS_PRIVATE = loadCoursePack("website") !== null
+
 describe("loadCoursePack", () => {
-  test("loads the website pack by its canonical id", () => {
+  test("loads the public _stub fixture pack", () => {
+    const pack = loadCoursePack("_stub")
+    expect(pack).not.toBeNull()
+    expect(pack?.id).toBe("_stub")
+    expect(pack?.missions.length).toBeGreaterThanOrEqual(1)
+    expect(pack?.system_prompt_overlay).toBeDefined()
+  })
+
+  test.skipIf(!HAS_PRIVATE)("loads the website pack by its canonical id", () => {
     const pack = loadCoursePack("website")
     expect(pack).not.toBeNull()
     expect(pack?.id).toBe("website")
@@ -11,7 +25,7 @@ describe("loadCoursePack", () => {
     expect(pack?.system_prompt_overlay).toBeDefined()
   })
 
-  test("legacy 'portfolio-site' id aliases to the website pack", () => {
+  test.skipIf(!HAS_PRIVATE)("legacy 'portfolio-site' id aliases to the website pack", () => {
     const pack = loadCoursePack("portfolio-site")
     expect(pack).not.toBeNull()
     // Alias resolves to the renamed pack — id reflects the new canonical id.
@@ -37,14 +51,14 @@ describe("loadCoursePack", () => {
 
 describe("findMission", () => {
   test("finds an existing mission by ID", () => {
-    const pack = loadCoursePack("website")!
+    const pack = loadCoursePack("_stub")!
     const m1 = findMission(pack, "mission-1")
     expect(m1).not.toBeNull()
-    expect(m1?.title).toContain("Project setup")
+    expect(m1?.title).toContain("Stub")
   })
 
   test("returns null for a missing mission", () => {
-    const pack = loadCoursePack("website")!
+    const pack = loadCoursePack("_stub")!
     expect(findMission(pack, "mission-999")).toBeNull()
   })
 })
@@ -56,24 +70,24 @@ describe("buildOverlay", () => {
   })
 
   test("includes pack overlay when pack provided", () => {
-    const pack = loadCoursePack("website")!
+    const pack = loadCoursePack("_stub")!
     const overlay = buildOverlay(pack, undefined)
-    expect(overlay).toContain("website")
+    expect(overlay.toLowerCase()).toContain("stub")
     expect(overlay.length).toBeGreaterThan(50)
   })
 
   test("includes active mission block when missionId provided", () => {
-    const pack = loadCoursePack("website")!
+    const pack = loadCoursePack("_stub")!
     const overlay = buildOverlay(pack, "mission-1")
     expect(overlay).toContain("Active mission")
     expect(overlay).toContain("mission-1")
-    expect(overlay).toContain("Project setup")
+    expect(overlay).toContain("Stub mission")
   })
 
   test("missing mission id silently omits the mission block (pack overlay still present)", () => {
-    const pack = loadCoursePack("website")!
+    const pack = loadCoursePack("_stub")!
     const overlay = buildOverlay(pack, "mission-bogus")
-    expect(overlay).toContain("website")
+    expect(overlay.toLowerCase()).toContain("stub")
     expect(overlay).not.toContain("Active mission")
   })
 
@@ -123,7 +137,7 @@ describe("buildOverlay", () => {
 })
 
 describe("loadCoursePack alias resolution", () => {
-  test("canonical id and alias resolve to the same pack", () => {
+  test.skipIf(!HAS_PRIVATE)("canonical id and alias resolve to the same pack", () => {
     const viaCanonical = loadCoursePack("website")
     const viaAlias = loadCoursePack("portfolio-site")
     expect(viaCanonical?.id).toBe("website")
