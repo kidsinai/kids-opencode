@@ -10,7 +10,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { join, resolve, isAbsolute } from "node:path"
 import { parse as parseYaml } from "yaml"
-import { bundledCoursePacksDir, findMission, loadCoursePack } from "./course-pack.js"
+import { findMission, loadCoursePack, packDir } from "./course-pack.js"
 
 export interface AcceptanceFile {
   mission_id: string
@@ -321,10 +321,13 @@ export function loadAcceptanceForMission(
   missionId: string,
 ): AcceptanceFile | null {
   if (!packId || !missionId) return null
-  if (packId.includes("/") || packId.includes("..")) return null
-  if (missionId.includes("/") || missionId.includes("..")) return null
+  if (missionId.includes("/") || missionId.includes("..") || missionId.includes("\\")) return null
 
-  const acceptancePath = join(bundledCoursePacksDir(), packId, missionId, "acceptance.yml")
+  // Resolve via packDir() so the private submodule wins over the public dir,
+  // matching loadCoursePack() / loadScaffold() behaviour.
+  const dir = packDir(packId)
+  if (!dir) return null
+  const acceptancePath = join(dir, missionId, "acceptance.yml")
   if (!existsSync(acceptancePath)) return null
 
   try {

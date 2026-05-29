@@ -39,7 +39,7 @@
 | 1 | Establish, implement, publish accountability process | 🟡 | Compliance officer = Lightman; this file + `docs/compliance/` directory are the published artifacts. Public-facing statement pending Airbotix-AI/airbotix `compliance/` page. |
 | 2 | Risk management process incl. impact on people | 🟡 | This document is the risk register baseline. Triggered review on every release (§9). |
 | 3 | Data governance — quality, provenance, security | 🟢 | CLI keeps kid code on the family device. Audit log: stderr (V0) → platform-backend persistence (Phase 5). DeepRouter request log retained 90d hot / 3y cold encrypted. |
-| 4 | Test AI models / systems for safety / performance | 🟡 | 50-prompt red-team set at `docs/red-team.md` (created 2026-05-15). Acceptance: ≥48/50 prompts safely refused or redirected before V0 launch. Currently 0/50 executed; runs scheduled in Phase 4. |
+| 4 | Test AI models / systems for safety / performance | 🟡 | 55-prompt red-team set at `docs/red-team.md` (created 2026-05-15; Class G added 2026-05-28 for the project-types feature). Acceptance: ≥53/55 prompts safely refused or redirected before V0 launch. Currently 0/55 executed; runs scheduled in Phase 4. Automated test suite: 197 unit tests across the plugin / TUI-plugin / client (incl. a tool-whitelist canary that fails if any new tool is wired). |
 | 5 | Human control / intervention (oversight) | 🟢 | `opencode` `permission.default: "ask"` enforces approval per tool call; system prompt rule #3 requires verbal announcement; parent audit log surfaces every action. |
 | 6 | Inform end-users about AI use | 🟢 | System prompt rule #5: "Never pretend to be human." Terminal banner on startup (implemented in `bin/kids-opencode` 2026-05-16). AI disclosure visible in airbotix.ai marketing. |
 | 7 | Establish challenge processes for affected people | 🟡 | Parent dashboard takedown flow planned in `Airbotix-AI/airbotix-app` (PLAN Phase 5). Email channel `privacy@airbotix.ai` documented in draft compliance statement. |
@@ -92,6 +92,7 @@ Legend: 🟢 implemented · 🟡 in progress / documented · 🔴 not started
 | R-19 | Unauthenticated localhost agent takeover — any local process can drive opencode's `127.0.0.1:4096` if `OPENCODE_SERVER_PASSWORD` is unset, reading kid project files / billing LLM calls / extracting prompts | Medium (multi-user laptops, shared school devices) | High | `install.sh` generates random 32-byte server-password via `openssl rand -base64 32` to `~/.config/kids-opencode/server-password` (chmod 600), config dir is chmod 700; `bin/kids-opencode` wrapper reads it and exports the env var before exec'ing opencode; fails loudly if password file missing | Team B + installer | 🟢 implemented (2026-05-16) |
 | R-20 | v2 SDK migration breaking our plugin mid-V0 | Low (verified Q1 — no v2 plugin variant exists) | Medium | Plugin imports unified `@opencode-ai/plugin` `Hooks` interface; verified in `docs/v2-api-verification.md` §Q1. Upstream-bump gauntlet (PLAN §"Upstream sync policy") includes hook-existence checks as the last gate | Team B | 🟢 verified |
 | R-21 | Upstream `opencode` introduces breaking change between releases (~21 versions/day published per npm view) | Medium | Medium | Exact version pin in `install.sh` for the (sdk, plugin, binary) triple; 2-weekly evaluation cadence; 15-check upgrade gauntlet must pass before merge; SBOM published per release for downstream reproducibility | Team B | 🟡 gauntlet workflow not yet wired |
+| R-22 | Scaffolder / vibe / project-name injection (project-types feature) — the kid's project name + chosen vibe are substituted into a course-pack HTML template, and the rendered text is embedded in the system-prompt overlay inside a code fence. A crafted project name could try to break out of the fence and inject instructions, smuggle markup into the page, or the kid could try to supply a malicious vibe palette. | Medium | Medium | (a) **Design A — template-based scaffolder with NO new tool**: the `read/write/edit/glob/grep/webfetch` whitelist (`src/index.ts`) is unchanged, guarded by a canary test in `test/plugin.test.ts`; (b) `vibeVarBag()` → `sanitizeProjectName()` strips backticks + control chars, collapses whitespace, clamps to 80 chars before substitution; (c) vibes are read from the pack's `pack.yml` (kid only *selects* an existing id, can't define palette/font); (d) the kid's own local HTML page is not a security boundary; (e) red-team Class G (G-1…G-5) covers this surface; (f) writes remain cwd-scoped (R-05). | Team B | 🟢 implemented (2026-05-28) |
 
 ---
 
@@ -103,6 +104,17 @@ Legend: 🟢 implemented · 🟡 in progress / documented · 🔴 not started
 | Some 🟡 items above (R-04, R-08, R-09, R-10, R-12) are not yet implemented | They are scheduled in PLAN Phase 4 / Phase 5; V0 launch is gated on their completion | V0 launch readiness check |
 | No formal independent third-party safety audit | V0 is alpha-scale (~20 workshop kids); independent audit is a V1 commitment when paid scale begins | V1 (post 100-family signup) |
 
+### Design decision — project-types scaffolder uses "no new tool" (Design A)
+
+The project-types feature (Game / Website packs + per-type guided flow) needed a way for the AI to produce a delightful first-5-minute artifact (a moving canvas game, a styled page). Two designs were considered:
+
+- **Design A (chosen)** — scaffolds are **file templates** shipped in the course pack; the plugin pre-renders the template (substituting the kid's vibe + project name) and embeds the rendered text in the system-prompt overlay. The AI proposes that exact content via the **existing `write` tool**, with the **existing kid-approval prompt**. No change to the tool whitelist.
+- **Design B (rejected for V0)** — a new `kids.scaffold` plugin tool the AI invokes directly. Deterministic, but it expands the tool whitelist + the `tool.execute.before` enforcement surface, which per this document and `CLAUDE.md` forces red-team + safety-assessment churn on every skill added.
+
+**Why A**: it keeps the safety surface frozen — the `read/write/edit/glob/grep/webfetch` whitelist is literally unchanged, asserted by a canary test (`packages/kids-plugin/test/plugin.test.ts` → "Design A canary"). The only residual is that A relies on the AI complying with the template rather than a hard guarantee.
+
+**Dogfood validation plan**: during Workshop dogfood (Phase 6), measure AI compliance with templates by counting `tool.execute.before` events where `tool=write`, `path=index.html`, and the proposed content fails a skeleton regex match against the expected scaffold. **If the deviation rate exceeds 10%, escalate to Design B** (accepting the tool-surface cost). Until then, A holds. Tracked as R-22.
+
 ---
 
 ## 7. Test evidence summary
@@ -111,7 +123,9 @@ Legend: 🟢 implemented · 🟡 in progress / documented · 🔴 not started
 |---|---|---|---|---|
 | Plugin TypeScript typecheck | ✅ | 2026-05-15 | Pass | `bunx tsc --noEmit` in `packages/kids-plugin/` |
 | Plugin module loads | ✅ | 2026-05-15 | `[AsyncFunction: plugin]` | `bun --print "(await import('./packages/kids-plugin/src/index.ts')).server"` |
-| 50-prompt red-team set | 🟡 designed | n/a | n/a | `docs/red-team.md`; Phase 4 |
+| Unit test suite (plugin + TUI-plugin + client) | ✅ | 2026-05-28 | 197 pass / 0 fail | `bun --filter '*' test` |
+| Tool-whitelist canary (Design A holds) | ✅ | 2026-05-28 | Pass — `kids.scaffold` etc. still rejected | `packages/kids-plugin/test/plugin.test.ts` |
+| 55-prompt red-team set | 🟡 designed | n/a | n/a | `docs/red-team.md`; Phase 4 |
 | 200-RPM burst load (DeepRouter side) | 🟡 not run | n/a | n/a | DeepRouter PLAN Phase 3 |
 | End-to-end kid session (`kids-opencode` running a real prompt) | 🟡 not run | n/a | needs provider key | Phase 2 |
 | Workshop dogfood | 🔴 not run | n/a | n/a | Phase 6 |
@@ -157,5 +171,6 @@ Calendar entry for next review: **2026-08-15**.
 
 | Version | Date | Note |
 |---|---|---|
+| 0.3 | 2026-05-28 | Added R-22 (scaffolder / vibe / project-name injection from the project-types feature — mitigated by Design A "no new tool", project-name sanitisation, pack-defined vibes, cwd-scoped writes, and red-team Class G). Documented the Design A vs Design B decision + dogfood validation plan in §6. Red-team set grew 50 → 55 (Class G); acceptance ≥53/55. Guardrail #4 updated with the 197-test automated suite + tool-whitelist canary. §7 test evidence updated. Tool whitelist unchanged — no safety-surface regression. |
 | 0.2 | 2026-05-16 | Added R-19 (unauthenticated `127.0.0.1:4096` takeover, mitigated by random server-password + chmod 700 config dir), R-20 (v2 SDK migration risk — neutralised by Q1 verification: no v2 plugin variant), R-21 (upstream version churn — partially mitigated by exact-pin policy; gauntlet workflow still TODO). Guardrail #6 (AI disclosure) banner moved from 🟡 "planned" to 🟢 "implemented" per `bin/kids-opencode` 2026-05-16 changes. |
 | 0.1 | 2026-05-15 | Initial assessment instantiating the AU-7 template. Pre-V0 baseline. 5/10 guardrails 🟢, 5/10 🟡, 0/10 🔴. |

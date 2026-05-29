@@ -31,6 +31,7 @@ import { listInstalledPacks, resolveContext } from "./core/course-pack.ts"
 import { readLastSession, writeLastSession } from "./core/last-session.ts"
 import { isCompletionTrigger, runCheck } from "./core/check-runner.ts"
 import { App } from "./render/ink/App.tsx"
+import { FREE_PLAY_PACK_ID } from "./render/ink/screens/CoursePackPicker.tsx"
 import { detectDangerousTopicEn, detectDangerousTopicZh } from "./dangerous-topic-bridge.ts"
 import { OAUTH_HANDOFF_EXIT_CODE, saveSetup, saveSetupOauth, type ProviderId } from "./core/setup.ts"
 import { reloadEnvFile } from "./core/env-reload.ts"
@@ -574,6 +575,12 @@ function makeFullHandlers(
       }
     },
     onPickPack: (packId) => {
+      if (packId === FREE_PLAY_PACK_ID) {
+        // Synthetic "I don't know yet — just chat" entry → free-play.
+        store.update({ coursePack: null, mission: null, packTitle: null, missionTitle: null, missionIndex: null, missionTotal: null })
+        store.update({ screen: { kind: "mission" } })
+        return
+      }
       store.update({ coursePack: packId, mission: null })
       refreshContext()
       store.update({ screen: { kind: "mission" } })

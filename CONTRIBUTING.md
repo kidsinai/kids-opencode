@@ -45,6 +45,12 @@ A Course Pack is a directory in `course-packs/<pack-id>/` containing:
 - `pack.yml` — metadata + system-prompt overlay + mission list
 - `mission-N/brief.md` — what the kid reads
 - `mission-N/acceptance.yml` — automated completion checks
+- `scaffolds/<skill-id>.html.template` *(optional)* — first-5-min file template with `${VAR}` placeholders
+
+> **Note**: production packs (Game, Website) live in the **private** `kidsinai/kids-flows`
+> submodule for curriculum-IP reasons. The submodule mounts at `course-packs/private/` and is
+> not visible after a fresh clone. New pack contributions are welcome via this public
+> `course-packs/<pack-id>/` path — please open an issue first so we can scope it together.
 
 We especially welcome:
 

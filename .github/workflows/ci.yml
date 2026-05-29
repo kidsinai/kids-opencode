@@ -79,25 +79,23 @@ jobs:
           grep -q 'AsyncFunction' /tmp/load-result.txt
 
       - name: Smoke — Course Pack parses
+        # Uses the public `_stub` fixture so CI doesn't need access to the
+        # private kids-flows submodule (real packs are exercised by the
+        # publish workflow, which does check out submodules).
         run: |
-          KIDS_COURSE_PACK=portfolio-site \
-            bun --print "JSON.stringify((await import('./packages/kids-plugin/src/course-pack.ts')).loadCoursePack('portfolio-site')).length > 100"
+          KIDS_COURSE_PACK=_stub \
+            bun --print "JSON.stringify((await import('./packages/kids-plugin/src/course-pack.ts')).loadCoursePack('_stub')).length > 100"
 
       - name: Smoke — acceptance runner end-to-end
+        # Exercises the runner against the `_stub` pack — just confirms the
+        # plumbing (pack lookup, mission lookup, check execution) works
+        # end-to-end without needing real curriculum content.
         run: |
           TMP=$(mktemp -d)
-          cat > "$TMP/index.html" <<'HTML'
-          <!DOCTYPE html>
-          <html><head><title>T</title></head>
-          <body>
-            <h1>Hi I am Sample</h1>
-            <p>I am building my first website. This is what I want it to be about: animals, space, and chess. I really love chess.</p>
-          </body>
-          </html>
-          HTML
+          touch "$TMP/index.html"
           cd "$TMP"
           bun "$GITHUB_WORKSPACE/packages/kids-plugin/src/check-runner.ts" \
-            mission-1 --course portfolio-site
+            mission-1 --course _stub
 
   notify-stale-upstream:
     name: Notify on stale upstream opencode

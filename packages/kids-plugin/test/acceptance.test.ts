@@ -3,6 +3,12 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { tmpdir } from "node:os"
 import { runMissionChecks } from "../src/acceptance"
+import { loadCoursePack } from "../src/course-pack"
+
+// Website acceptance content lives in the private kids-flows submodule.
+// Website-specific Mission tests skip in public CI (no submodule); generic
+// runner-plumbing tests use the public `_stub` pack instead.
+const HAS_PRIVATE = loadCoursePack("website") !== null
 
 describe("acceptance runner", () => {
   let projectDir: string
@@ -30,15 +36,16 @@ describe("acceptance runner", () => {
 
   test("reports usage error for non-existent mission in valid pack", () => {
     const result = runMissionChecks("mission-999", {
-      packId: "portfolio-site",
+      packId: "_stub",
       projectDir,
     })
     expect("error" in result).toBe(true)
   })
 
-  test("empty project folder fails Mission 1", () => {
+  test("empty project folder fails a mission (file_exists check)", () => {
+    // Uses the public _stub pack so this runs in public CI without the submodule.
     const result = runMissionChecks("mission-1", {
-      packId: "portfolio-site",
+      packId: "_stub",
       projectDir,
     })
     expect("error" in result).toBe(false)
@@ -47,7 +54,16 @@ describe("acceptance runner", () => {
     expect(result.failed).toBeGreaterThan(0)
   })
 
-  test("Mission 1 passes when index.html with full structure is present", () => {
+  test("_stub mission passes once index.html exists (runner plumbing)", () => {
+    writeFileSync(join(projectDir, "index.html"), "<!DOCTYPE html><html><body><h1>Hi</h1></body></html>")
+    const result = runMissionChecks("mission-1", { packId: "_stub", projectDir })
+    expect("error" in result).toBe(false)
+    if ("error" in result) return
+    expect(result.failed).toBe(0)
+    expect(result.ok).toBe(true)
+  })
+
+  test.skipIf(!HAS_PRIVATE)("Mission 1 passes when index.html with full structure is present", () => {
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><title>Test</title></head>
@@ -70,7 +86,7 @@ describe("acceptance runner", () => {
     expect(result.ok).toBe(true)
   })
 
-  test("Mission 2 fails without style.css and link", () => {
+  test.skipIf(!HAS_PRIVATE)("Mission 2 fails without style.css and link", () => {
     writeFileSync(
       join(projectDir, "index.html"),
       "<html><body><h1>Hi</h1></body></html>",
@@ -84,7 +100,7 @@ describe("acceptance runner", () => {
     expect(result.failed).toBeGreaterThan(0)
   })
 
-  test("Mission 2 passes with linked stylesheet using common CSS properties", () => {
+  test.skipIf(!HAS_PRIVATE)("Mission 2 passes with linked stylesheet using common CSS properties", () => {
     writeFileSync(
       join(projectDir, "index.html"),
       `<html><head><link rel="stylesheet" href="style.css"></head><body><h1>Hi</h1></body></html>`,
@@ -125,46 +141,43 @@ p {
     expect(result.ok).toBe(true)
   })
 
-  test("Mission 3 detects either addEventListener OR onclick wiring", () => {
-    writeFileSync(
-      join(projectDir, "index.html"),
-      `<html><head><link rel="stylesheet" href="style.css"></head>
-<body><h1>Hi</h1><button id="btn">click me</button>
-<script src="script.js"></script></body></html>`,
-    )
-    writeFileSync(join(projectDir, "style.css"), `body { color: red; font-family: Arial; }`)
-    // onclick form
-    writeFileSync(
-      join(projectDir, "script.js"),
-      `document.getElementById('btn').onclick = function () { alert('hi'); };`,
-    )
-    const r1 = runMissionChecks("mission-3", {
-      packId: "portfolio-site",
-      projectDir,
-    })
+  test.skipIf(!HAS_PRIVATE)("Mission 3 detects inline JS wiring (onclick OR addEventListener)", () => {
+    // Website Mission 3 is now single-file: HTML + inline <script>. Acceptance
+    // checks index.html for an interactive element + JS wiring, not a separate
+    // script.js. Sample needs ≥700 chars to clear the substance check.
+    const padding = "<p>A bit about me and the things I like to make and do.</p>".repeat(8)
+    const onclickPage = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Me</title>
+<style>body{font-family:system-ui;background:#fff;color:#111}</style></head>
+<body><h1>My site</h1>${padding}
+<button id="btn">Switch theme</button>
+<script>document.getElementById('btn').onclick = function () { document.body.classList.toggle('dark'); };</script>
+</body></html>`
+    writeFileSync(join(projectDir, "index.html"), onclickPage)
+    const r1 = runMissionChecks("mission-3", { packId: "portfolio-site", projectDir })
     expect("error" in r1).toBe(false)
     if ("error" in r1) return
-    // not necessarily all passes (Mission 2 dependencies might miss) but the event-listener check passes:
-    const evtCheck = r1.results.find((r) => r.id === "script_has_event_listener")
-    expect(evtCheck?.status).toBe("pass")
+    expect(r1.results.find((r) => r.id === "index_html_has_js_wiring")?.status).toBe("pass")
+    expect(r1.results.find((r) => r.id === "index_html_has_interactive_element")?.status).toBe("pass")
 
-    // addEventListener form
-    writeFileSync(
-      join(projectDir, "script.js"),
-      `document.getElementById('btn').addEventListener('click', () => alert('hi'));`,
-    )
-    const r2 = runMissionChecks("mission-3", {
-      packId: "portfolio-site",
-      projectDir,
-    })
+    // addEventListener + localStorage form (guestbook style)
+    const guestbookPage = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Me</title></head>
+<body><h1>My site</h1>${padding}
+<input id="msg"><button id="save">Save</button><ul id="list"></ul>
+<script>
+document.getElementById('save').addEventListener('click', () => {
+  localStorage.setItem('m', document.getElementById('msg').value);
+});
+</script></body></html>`
+    writeFileSync(join(projectDir, "index.html"), guestbookPage)
+    const r2 = runMissionChecks("mission-3", { packId: "portfolio-site", projectDir })
     if ("error" in r2) return
-    const evtCheck2 = r2.results.find((r) => r.id === "script_has_event_listener")
-    expect(evtCheck2?.status).toBe("pass")
+    expect(r2.results.find((r) => r.id === "index_html_has_js_wiring")?.status).toBe("pass")
+    expect(r2.ok).toBe(true)
   })
 
   test("refuses path traversal in mission id", () => {
     const result = runMissionChecks("../etc/passwd", {
-      packId: "portfolio-site",
+      packId: "_stub",
       projectDir,
     })
     expect("error" in result).toBe(true)

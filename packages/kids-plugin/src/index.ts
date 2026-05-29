@@ -34,7 +34,10 @@ import {
   loadCoursePack,
   type CoursePack,
   type CoursePackMission,
+  type PreRenderedScaffold,
+  type ScaffoldCatalogEntry,
 } from "./course-pack.js"
+import { listScaffoldsForPack, renderScaffold, vibeVarBag } from "./skills.js"
 
 const ALLOWED_TOOLS = new Set([
   "read",
@@ -177,7 +180,34 @@ const plugin: Plugin = async (_input, _options) => {
 
   const baseContext = readContextFromEnv(pack)
   const baseSystemPrompt = buildSystemPrompt(baseContext)
-  const overlay = buildOverlay(pack, process.env.KIDS_MISSION)
+
+  // Skill / scaffolder mechanism (template-based, no new tool — see skills.ts header).
+  // We pre-render the first-5-min scaffold so the AI's first write proposal is curriculum-vetted.
+  const vibeId = process.env.KIDS_VIBE_ID || undefined
+  const projectName = process.env.KIDS_PROJECT_NAME || undefined
+  const scaffoldCatalog: ScaffoldCatalogEntry[] = pack ? listScaffoldsForPack(pack) : []
+  let preRenderedScaffold: PreRenderedScaffold | undefined
+  const firstSkillId = pack?.guided_flow?.first_5_min_skill
+  if (pack && firstSkillId) {
+    try {
+      const vars = vibeVarBag(pack, vibeId, projectName)
+      const content = renderScaffold(pack.id, firstSkillId, vars)
+      preRenderedScaffold = { skill_id: firstSkillId, file_target: "index.html", content }
+    } catch (err) {
+      audit("scaffold.render_error", {
+        pack: pack.id,
+        skill: firstSkillId,
+        error: (err as Error).message,
+      })
+    }
+  }
+
+  const overlay = buildOverlay(pack, process.env.KIDS_MISSION, {
+    vibeId,
+    projectName,
+    scaffoldCatalog,
+    preRenderedScaffold,
+  })
 
   const hooks: Hooks = {
     "experimental.chat.system.transform": async (_input, output) => {
@@ -257,6 +287,14 @@ export const server = plugin
 // run mission acceptance checks from inside the TUI (Phase 2.5 "In-TUI
 // mission check command").
 export { buildSystemPrompt, loadCoursePack, buildOverlay, findMission, bundledCoursePacksDir }
+export { renderScaffold, listScaffoldsForPack, vibeVarBag } from "./skills.ts"
 export { runMissionChecks, loadAcceptanceForMission } from "./acceptance.ts"
 export type { SystemPromptContext, CoursePack, CoursePackMission }
+export type {
+  GuidedFlow,
+  GuidedFlowVibe,
+  ScaffoldCatalogEntry,
+  PreRenderedScaffold,
+  BuildOverlayOptions,
+} from "./course-pack.ts"
 export type { MissionResult, CheckResult, AcceptanceCheck } from "./acceptance.ts"

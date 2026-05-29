@@ -2,8 +2,10 @@
  * §3.1 Startup screen — first impression. Must paint within 5s.
  *
  * Quick keys:
- *   Enter → start a free-play session OR continue if a course pack is set
- *   c     → choose a Course Pack
+ *   Enter → if a Course Pack is preselected (via --course): continue.
+ *           Otherwise: open the project-type picker.
+ *   c     → open the project-type picker explicitly
+ *   f     → start a free-play session (no Course Pack)
  *   r     → resume the last session
  *   w     → open Airbotix Portal wallet / login in the parent's browser
  *   h     → show kid-friendly help
@@ -27,8 +29,9 @@ interface StartupScreenProps {
 export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet }: StartupScreenProps): React.ReactElement {
   const theme = getTheme()
   useInput((input, key) => {
-    if (key.return) onStart(coursePack ? "course" : "free")
+    if (key.return) onStart("course")
     else if (input === "c") onStart("course")
+    else if (input === "f") onStart("free")
     else if (input === "r") onStart("resume")
     else if (input === "w" || input === "W") onOpenWallet()
     else if (input === "h") onStart("help")
@@ -53,8 +56,9 @@ export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet
       </Box>
       <Box marginTop={2}>
         <KeyHints hints={[
-          { key: "Enter", label: coursePack ? t.startCourse : t.startFree },
-          { key: "c", label: t.pickCourse },
+          { key: "Enter", label: coursePack ? t.startCourse : t.pickCourse },
+          ...(coursePack ? [{ key: "c", label: t.pickCourse }] : []),
+          { key: "f", label: t.startFree },
           { key: "r", label: t.resume },
           { key: "w", label: t.wallet },
           { key: "h", label: t.help },

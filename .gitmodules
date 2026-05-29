@@ -1,0 +1,3 @@
+[submodule "packages/kids-plugin/course-packs/private"]
+	path = packages/kids-plugin/course-packs/private
+	url = https://github.com/kidsinai/kids-flows.git

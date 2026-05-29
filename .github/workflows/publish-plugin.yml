@@ -39,6 +39,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name || inputs.tag }}
+          submodules: recursive
+          # Private kids-flows submodule. Use a fine-grained PAT or deploy key
+          # with read access to kidsinai/kids-flows. The plugin npm bundle is
+          # incomplete (no game / website packs) without this.
+          token: ${{ secrets.KIDS_FLOWS_READ_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -84,14 +89,23 @@ jobs:
           # Whatever ends up in `files:` is what npm publishes. Sanity-check.
           test -d src
           test -d course-packs
-          test -f course-packs/portfolio-site/pack.yml
-          test -f course-packs/portfolio-site/mission-1/acceptance.yml
-          test -f course-packs/portfolio-site/mission-1/brief.md
           test -f src/index.ts
           test -f src/system-prompt.ts
           test -f src/course-pack.ts
           test -f src/acceptance.ts
           test -f src/check-runner.ts
+          test -f src/skills.ts
+          # Public stub pack — exercises the schema + renderer path even
+          # when the private submodule isn't mounted.
+          test -f course-packs/_stub/pack.yml
+          test -f course-packs/_stub/scaffolds/hello.html.template
+          # Private submodule content. Fails the publish if the submodule
+          # wasn't checked out (npm bundle would otherwise ship without
+          # the kid-facing course packs).
+          test -f course-packs/private/portfolio-site/pack.yml \
+            || (echo "::error::Private submodule not mounted — bundle would be incomplete. Check submodule checkout + KIDS_FLOWS_READ_TOKEN secret." && exit 1)
+          test -f course-packs/private/portfolio-site/mission-1/acceptance.yml
+          test -f course-packs/private/portfolio-site/mission-1/brief.md
 
       - name: Publish to npm with provenance
         working-directory: packages/kids-plugin

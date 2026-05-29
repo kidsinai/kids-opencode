@@ -55,18 +55,20 @@ describe("gauntlet · static", () => {
 
   // Check #10 — `kids-opencode check mission-1` end-to-end on a satisfying
   // sample project. Reuses runMissionChecks() directly to avoid spawning.
-  test("#10 acceptance runner passes on sample project for portfolio-site mission-1", () => {
+  // Uses the public `_stub` pack so the gauntlet runs without the private
+  // kids-flows submodule (real-pack acceptance is covered in acceptance.test.ts
+  // + the publish workflow, which check out the submodule).
+  test("#10 acceptance runner passes on a satisfying sample project (_stub mission-1)", () => {
     const dir = mkdtempSync(join(tmpdir(), "gauntlet-sample-"))
     try {
       writeFileSync(
         join(dir, "index.html"),
-        "<!DOCTYPE html><html><head><title>Sample Portfolio</title></head>" +
+        "<!DOCTYPE html><html><head><title>Sample</title></head>" +
           "<body><h1>Hi I am Sample</h1>" +
-          "<p>I am building my first website. This is what I want it to be about: " +
-          "animals, space, and chess. I really love chess.</p></body></html>",
+          "<p>A sample project used by the upstream-sync gauntlet.</p></body></html>",
         "utf8",
       )
-      const result = runMissionChecks("mission-1", { packId: "portfolio-site", projectDir: dir })
+      const result = runMissionChecks("mission-1", { packId: "_stub", projectDir: dir })
       if ("error" in result) {
         throw new Error(`acceptance runner errored: ${result.error}`)
       }
@@ -97,10 +99,12 @@ describe("gauntlet · static", () => {
     // plugin failing to typecheck (gauntlet wraps the typecheck step in CI).
   })
 
-  // Course Pack loader sanity: portfolio-site is the V0 flagship and must
-  // always be findable + parsable so the picker doesn't show "no packs".
-  test("portfolio-site Course Pack loads + has missions", () => {
-    const pack = loadCoursePack("portfolio-site")
+  // Course Pack loader sanity: the public `_stub` pack must always be
+  // findable + parsable so the loader path is exercised even without the
+  // private kids-flows submodule. (Real packs — game / website — load via
+  // the same code path and are covered in course-pack.test.ts.)
+  test("_stub Course Pack loads + has missions", () => {
+    const pack = loadCoursePack("_stub")
     expect(pack).not.toBeNull()
     expect(pack?.missions.length).toBeGreaterThanOrEqual(1)
     const m1 = pack ? findMission(pack, "mission-1") : null
