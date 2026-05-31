@@ -1,0 +1,106 @@
+name: Publish CLI + client + tui-plugin to npm
+
+# Publishes the three non-plugin packages in lock-step with every tagged
+# release:
+#   - @kidsinai/kids-opencode          (packages/kids-opencode)  — the CLI wrapper
+#   - @kidsinai/kids-client            (packages/kids-client)    — the TUI client
+#   - @kidsinai/kids-opencode-tui-plugin (packages/kids-tui-plugin)
+#
+# The plugin (@kidsinai/kids-opencode-plugin) is published separately by
+# publish-plugin.yml because it needs the private kids-flows submodule mounted.
+# None of the packages here ship course-pack content, so no submodule checkout
+# is required.
+#
+# Prerequisites (one-time setup by Lightman):
+#  1. npm @kidsinai scope created, NPM_TOKEN ("Automation" token) in repo secrets
+#  2. Each package's package.json `version` bumped to match the release tag
+#
+# Trigger: any `v*` tag published as a GitHub Release (or manual dispatch).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.0.16). Required for manual dispatch."
+        required: true
+        type: string
+
+concurrency:
+  group: publish-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish ${{ matrix.dir }}
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write   # OIDC for npm provenance
+
+    strategy:
+      fail-fast: false
+      # Order is cosmetic — npm publish does not validate dependency
+      # availability — but we publish leaf packages before the CLI that
+      # depends on them for tidiness.
+      matrix:
+        dir:
+          - kids-client
+          - kids-tui-plugin
+          - kids-opencode
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.x
+
+      - name: Setup Node (for npm publish + provenance)
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          registry-url: "https://registry.npmjs.org"
+          scope: "@kidsinai"
+          always-auth: true
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Sanity — package version matches tag
+        working-directory: packages/${{ matrix.dir }}
+        run: |
+          tag="${{ github.event.release.tag_name || inputs.tag }}"
+          tag_version="${tag#v}"
+          pkg_version=$(jq -r '.version' package.json)
+          echo "tag version: $tag_version"
+          echo "package.json version: $pkg_version"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "::error::package.json version ($pkg_version) does not match release tag ($tag_version). Bump package.json before tagging."
+            exit 1
+          fi
+
+      - name: Typecheck (if the package defines one)
+        working-directory: packages/${{ matrix.dir }}
+        run: |
+          if jq -e '.scripts.typecheck' package.json >/dev/null; then
+            bun run typecheck
+          else
+            echo "no typecheck script — skipping"
+          fi
+
+      - name: Test
+        working-directory: packages/${{ matrix.dir }}
+        run: bun run test
+
+      - name: Publish to npm with provenance
+        working-directory: packages/${{ matrix.dir }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --provenance --access public
