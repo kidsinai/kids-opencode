@@ -102,10 +102,15 @@ jobs:
           # Private submodule content. Fails the publish if the submodule
           # wasn't checked out (npm bundle would otherwise ship without
           # the kid-facing course packs).
-          test -f course-packs/private/portfolio-site/pack.yml \
+          # Packs were renamed in 0.0.16: portfolio-site → website, and a new
+          # game pack was added. Both must ship.
+          test -f course-packs/private/website/pack.yml \
             || (echo "::error::Private submodule not mounted — bundle would be incomplete. Check submodule checkout + KIDS_FLOWS_READ_TOKEN secret." && exit 1)
-          test -f course-packs/private/portfolio-site/mission-1/acceptance.yml
-          test -f course-packs/private/portfolio-site/mission-1/brief.md
+          test -f course-packs/private/website/mission-1/acceptance.yml
+          test -f course-packs/private/website/mission-1/brief.md
+          test -f course-packs/private/game/pack.yml
+          test -f course-packs/private/game/mission-1/acceptance.yml
+          test -f course-packs/private/game/mission-1/brief.md
 
       - name: Publish to npm with provenance
         working-directory: packages/kids-plugin
