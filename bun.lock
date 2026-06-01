@@ -12,12 +12,12 @@
     },
     "packages/kids-client": {
       "name": "@kidsinai/kids-client",
-      "version": "0.0.19",
+      "version": "0.0.20",
       "bin": {
         "kids-client": "./bin/kids-client",
       },
       "dependencies": {
-        "@kidsinai/kids-opencode-plugin": "^0.0.19",
+        "@kidsinai/kids-opencode-plugin": "^0.0.20",
         "ink": "^5.0.1",
         "ink-spinner": "^5.0.0",
         "ink-text-input": "^6.0.0",
@@ -35,19 +35,19 @@
     },
     "packages/kids-opencode": {
       "name": "@kidsinai/kids-opencode",
-      "version": "0.0.19",
+      "version": "0.0.20",
       "bin": {
         "kids-opencode": "./bin/kids-opencode",
       },
       "dependencies": {
-        "@kidsinai/kids-client": "^0.0.19",
-        "@kidsinai/kids-opencode-plugin": "^0.0.19",
-        "@kidsinai/kids-opencode-tui-plugin": "^0.0.19",
+        "@kidsinai/kids-client": "^0.0.20",
+        "@kidsinai/kids-opencode-plugin": "^0.0.20",
+        "@kidsinai/kids-opencode-tui-plugin": "^0.0.20",
       },
     },
     "packages/kids-plugin": {
       "name": "@kidsinai/kids-opencode-plugin",
-      "version": "0.0.19",
+      "version": "0.0.20",
       "dependencies": {
         "yaml": "^2.9.0",
       },
@@ -63,9 +63,9 @@
     },
     "packages/kids-tui-plugin": {
       "name": "@kidsinai/kids-opencode-tui-plugin",
-      "version": "0.0.19",
+      "version": "0.0.20",
       "dependencies": {
-        "@kidsinai/kids-opencode-plugin": "^0.0.19",
+        "@kidsinai/kids-opencode-plugin": "^0.0.20",
       },
       "devDependencies": {
         "@opencode-ai/plugin": "^1.14.51",

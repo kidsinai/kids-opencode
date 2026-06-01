@@ -80,9 +80,13 @@ export class SessionManager {
     // SDK 1.14.51 signature: single parameters object, kid's text under .prompt.text.
     // Pass SDK_THROW so 4xx/5xx surface as exceptions instead of getting
     // silently swallowed (the bug behind the "thinking…" hang).
+    // `model` (from the /model picker) is a "providerID/modelID" string; the SDK
+    // wants it split into { providerID, modelID }.
+    const model = splitModelId(opts?.model)
     const payload = {
       sessionID,
       prompt: { text },
+      ...(model ? { model } : {}),
       ...(opts?.agent ? { agent: opts.agent } : {}),
     }
     debug("session.prompt: sending", { sessionID, textLen: text.length })
@@ -116,6 +120,18 @@ function extractId(result: unknown): string | null {
     return r.id ?? r.data?.id ?? null
   }
   return null
+}
+
+/**
+ * Split a "providerID/modelID" id (as built by the /model picker) into the
+ * shape the SDK prompt body wants. Splits on the FIRST slash so model ids that
+ * themselves contain "/" survive. Returns undefined for empty/no input.
+ */
+function splitModelId(id: string | undefined): { providerID: string; modelID: string } | undefined {
+  if (!id) return undefined
+  const slash = id.indexOf("/")
+  if (slash <= 0 || slash === id.length - 1) return undefined
+  return { providerID: id.slice(0, slash), modelID: id.slice(slash + 1) }
 }
 
 /** SDK list responses come back as `T[]` or `{ data: T[] }` across versions. */
