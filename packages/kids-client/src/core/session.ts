@@ -62,20 +62,25 @@ export class SessionManager {
   async prompt(text: string, opts?: { model?: string; agent?: string }): Promise<void> {
     if (!this.currentSessionId) await this.create()
     const sessionID = this.currentSessionId!
-    const api = (this.client as unknown as { session?: { prompt: (sessionID: string, body: unknown) => Promise<unknown> } }).session
+    const api = (this.client as unknown as { session?: { prompt: (parameters: unknown) => Promise<unknown> } }).session
     if (!api?.prompt) throw new Error("SDK v2: client.session.prompt unavailable")
-    await api.prompt(sessionID, {
-      parts: [{ type: "text", text }],
-      model: opts?.model,
-      agent: opts?.agent,
+    // SDK 1.14.51 signature is a single parameters object with the kid's
+    // message under .prompt: { text } (NOT positional sessionID + body, NOT
+    // .parts). Calling the wrong shape made opencode silently drop the
+    // request — kids saw "thinking…" forever because no LLM call ever fired.
+    await api.prompt({
+      sessionID,
+      prompt: { text },
+      ...(opts?.agent ? { agent: opts.agent } : {}),
     })
   }
 
   async abort(): Promise<void> {
     if (!this.currentSessionId) return
-    const api = (this.client as unknown as { session?: { abort: (sessionID: string) => Promise<unknown> } }).session
+    const api = (this.client as unknown as { session?: { abort: (parameters: unknown) => Promise<unknown> } }).session
     if (!api?.abort) return
-    await api.abort(this.currentSessionId)
+    // SDK 1.14.51: single parameters object, not positional sessionID.
+    await api.abort({ sessionID: this.currentSessionId })
   }
 }
 
