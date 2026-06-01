@@ -8,6 +8,18 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+## [0.0.20] — 2026-06-01
+
+### Fixed
+- **"Your AI teacher is thinking…" never cleared.** Real root cause: SDK 1.14.51's
+  `session.prompt` / `session.abort` take a single parameters object
+  (`{ sessionID, prompt: { text } }`), not the legacy `(sessionID, { parts })` positional shape —
+  the wrong shape made opencode silently drop the message. Calls now use the correct shape and pass
+  `throwOnError` so 4xx/5xx surface instead of hanging. (Landed across `ddc63fc`/`e29404c`/`f0007b5`.)
+- **`/model` selection was being ignored.** The prompt-shape fix above had dropped the model
+  passthrough; re-wired it — the picked `providerID/modelID` is now split and sent in the SDK's
+  `model: { providerID, modelID }` field on every turn.
+
 ## [0.0.19] — 2026-06-01
 
 ### Added
