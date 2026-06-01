@@ -80,7 +80,7 @@ export const PROVIDERS: ProviderChoice[] = [
   },
   {
     id: "openai",
-    label: "OpenAI GPT (ChatGPT Plus/Pro 可直接登录)",
+    label: "OpenAI GPT (sign in with ChatGPT Plus/Pro)",
     hint: "Already pay for ChatGPT Plus/Pro? Sign in with that — no API key. Otherwise pay-as-you-go ~$5-10/month.",
     envVar: "OPENAI_API_KEY",
     apiKeyUrl: "https://platform.openai.com/api-keys",

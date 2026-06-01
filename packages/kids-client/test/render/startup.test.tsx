@@ -11,6 +11,7 @@ describe("StartupScreen", () => {
         coursePack: null,
         onStart: () => {},
         onOpenWallet: () => {},
+        onQuit: () => {},
         toast: null,
       }),
     )
@@ -26,6 +27,7 @@ describe("StartupScreen", () => {
         coursePack: null,
         onStart: () => {},
         onOpenWallet: () => {},
+        onQuit: () => {},
         toast: null,
       }),
     )
@@ -41,6 +43,7 @@ describe("StartupScreen", () => {
         coursePack: "portfolio-site",
         onStart: () => {},
         onOpenWallet: () => {},
+        onQuit: () => {},
         toast: null,
       }),
     )
@@ -54,12 +57,29 @@ describe("StartupScreen", () => {
         coursePack: null,
         onStart: () => {},
         onOpenWallet: () => {},
+        onQuit: () => {},
         toast: null,
       }),
     )
     const frame = lastFrame() ?? ""
     expect(frame).toContain("[w]")
     expect(frame).toContain("Wallet")
+  })
+
+  test("[q] Quit hint is shown so the kid isn't trapped", () => {
+    const { lastFrame } = render(
+      React.createElement(StartupScreen, {
+        locale: "en",
+        coursePack: null,
+        onStart: () => {},
+        onOpenWallet: () => {},
+        onQuit: () => {},
+        toast: null,
+      }),
+    )
+    const frame = lastFrame() ?? ""
+    expect(frame).toContain("[q]")
+    expect(frame).toContain("Quit")
   })
 
   test("renders toast under KeyHints when toast is set", () => {
@@ -69,6 +89,7 @@ describe("StartupScreen", () => {
         coursePack: null,
         onStart: () => {},
         onOpenWallet: () => {},
+        onQuit: () => {},
         toast: { kind: "success", text: "Opened in your browser: https://app.airbotix.ai/portal/wallet?from=cli" },
       }),
     )

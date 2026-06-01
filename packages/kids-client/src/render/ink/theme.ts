@@ -36,9 +36,13 @@ export interface Theme {
 
 /** Default — vibrant on a dark terminal. */
 const DARK: Theme = {
-  fg: "white",
+  // Primary text is bright white and secondary text is plain white (not
+  // "gray"/blackBright, which renders near-invisible on many dark themes) so
+  // body copy actually reads. The fg/fgDim pair still differ enough to mark
+  // hierarchy. See dogfood feedback: "can't see the text, not prominent".
+  fg: "whiteBright",
   bg: "black",
-  fgDim: "gray",
+  fgDim: "white",
   accent: "yellow",
   warn: "yellow",
   danger: "red",

@@ -24,20 +24,29 @@ interface MissionScreenProps {
   locale: "zh-Hans" | "en"
   onPrompt: (text: string) => void
   onAbort: () => void
+  /** Leave the mission and return to the startup menu. */
+  onExit: () => void
 }
 
-export function MissionScreen({ state, locale, onPrompt, onAbort }: MissionScreenProps): React.ReactElement {
+export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: MissionScreenProps): React.ReactElement {
   const theme = getTheme()
   const [draft, setDraft] = useState("")
   const placeholder = locale === "zh-Hans" ? "想做什么？告诉我吧（中文/英文都行）" : "What would you like to make? (English or Chinese)"
 
+  // Esc is overloaded so it never eats the kid's typing: while the AI is
+  // thinking it interrupts; with text typed it clears the draft; when idle and
+  // empty it leaves the mission back to the startup menu (so the kid isn't
+  // trapped here — dogfood feedback).
   useInput((_, key) => {
-    if (key.escape && state.thinking) onAbort()
+    if (!key.escape) return
+    if (state.thinking) onAbort()
+    else if (draft.length > 0) setDraft("")
+    else onExit()
   })
 
   const hint = locale === "zh-Hans"
-    ? "提示：做完一关时打 /check 或「我做完了」就能验收 · 按 Esc 打断 AI"
-    : "Tip: type /check or 'I'm done' to validate · Esc interrupts the AI"
+    ? "提示：做完一关时打 /check 或「我做完了」就能验收 · 按 Esc 打断 AI / 返回菜单"
+    : "Tip: type /check or 'I'm done' to validate · Esc interrupts the AI / returns to menu"
 
   return (
     <Box flexDirection="column">

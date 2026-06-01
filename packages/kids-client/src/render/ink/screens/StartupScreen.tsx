@@ -9,6 +9,7 @@
  *   r     → resume the last session
  *   w     → open Airbotix Portal wallet / login in the parent's browser
  *   h     → show kid-friendly help
+ *   q     → quit Kids OpenCode
  */
 
 import React from "react"
@@ -24,9 +25,10 @@ interface StartupScreenProps {
   toast: ToastState | null
   onStart: (mode: "free" | "course" | "resume" | "help") => void
   onOpenWallet: () => void
+  onQuit: () => void
 }
 
-export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet }: StartupScreenProps): React.ReactElement {
+export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet, onQuit }: StartupScreenProps): React.ReactElement {
   const theme = getTheme()
   useInput((input, key) => {
     if (key.return) onStart("course")
@@ -35,6 +37,7 @@ export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet
     else if (input === "r") onStart("resume")
     else if (input === "w" || input === "W") onOpenWallet()
     else if (input === "h") onStart("help")
+    else if (input === "q" || input === "Q") onQuit()
   })
   const t = STRINGS[locale]
   return (
@@ -62,6 +65,7 @@ export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet
           { key: "r", label: t.resume },
           { key: "w", label: t.wallet },
           { key: "h", label: t.help },
+          { key: "q", label: t.quit },
         ]} />
       </Box>
       {toast && (
@@ -87,6 +91,7 @@ const STRINGS = {
     resume: "继续上次",
     wallet: "钱包 / 充值（开浏览器）",
     help: "帮助",
+    quit: "退出",
   },
   en: {
     tagline: "🤖  Your AI coding buddy  🤖",
@@ -101,5 +106,6 @@ const STRINGS = {
     resume: "Resume last session",
     wallet: "Wallet / Top up (opens browser)",
     help: "Help",
+    quit: "Quit",
   },
 } as const
