@@ -10,6 +10,7 @@
  */
 
 import type { OpencodeClient } from "./connection.ts"
+import type { SessionSummary } from "./store.ts"
 
 export class SessionManager {
   private client: OpencodeClient
@@ -21,6 +22,31 @@ export class SessionManager {
 
   getId(): string | null {
     return this.currentSessionId
+  }
+
+  /** Forget the current session so the next prompt() opens a fresh one. */
+  reset(): void {
+    this.currentSessionId = null
+  }
+
+  /** List past sessions (for the `/sessions` picker). Newest-ish first. */
+  async list(): Promise<SessionSummary[]> {
+    const api = (this.client as unknown as { session?: { list?: () => Promise<unknown> } }).session
+    if (!api?.list) return []
+    const raw = await api.list()
+    const arr = unwrapArray(raw)
+    return arr
+      .map((s) => {
+        const o = s as { id?: string; title?: string }
+        if (!o?.id) return null
+        return { id: o.id, title: (o.title ?? "").trim() || o.id }
+      })
+      .filter((s): s is SessionSummary => s !== null)
+  }
+
+  /** Continue an existing session: subsequent prompt()s append to it. */
+  switchTo(sessionID: string): void {
+    this.currentSessionId = sessionID
   }
 
   async create(): Promise<string> {
@@ -60,4 +86,14 @@ function extractId(result: unknown): string | null {
     return r.id ?? r.data?.id ?? null
   }
   return null
+}
+
+/** SDK list responses come back as `T[]` or `{ data: T[] }` across versions. */
+function unwrapArray(result: unknown): unknown[] {
+  if (Array.isArray(result)) return result
+  if (result && typeof result === "object") {
+    const d = (result as { data?: unknown }).data
+    if (Array.isArray(d)) return d
+  }
+  return []
 }

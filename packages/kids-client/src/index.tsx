@@ -30,6 +30,8 @@ import { Store } from "./core/store.ts"
 import { listInstalledPacks, resolveContext } from "./core/course-pack.ts"
 import { readLastSession, writeLastSession } from "./core/last-session.ts"
 import { isCompletionTrigger, runCheck } from "./core/check-runner.ts"
+import { parseSlash, matchCommand } from "./core/commands.ts"
+import { listModels } from "./core/models.ts"
 import { App } from "./render/ink/App.tsx"
 import { FREE_PLAY_PACK_ID } from "./render/ink/screens/CoursePackPicker.tsx"
 import { detectDangerousTopicEn, detectDangerousTopicZh } from "./dangerous-topic-bridge.ts"
@@ -58,6 +60,7 @@ interface FullHandlers {
   onErrorRetry: () => Promise<void>
   onPickPack: (packId: string) => void
   onMissionNext: () => void
+  onSessionPick: (sessionId: string) => void
 }
 
 interface AppHandlers {
@@ -75,6 +78,9 @@ interface AppHandlers {
   onMissionNext: () => void
   onMissionBack: () => void
   onMissionExit: () => void
+  onModelPick: (modelId: string) => void
+  onSessionPick: (sessionId: string) => void
+  onPickerClose: () => void
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
@@ -230,6 +236,27 @@ function makeHandlers(
     onPickerBack: () => store.update({ screen: { kind: "startup" } }),
     onMissionNext: ifBooted((s) => s.handlers.onMissionNext()),
     onMissionBack: () => store.update({ screen: { kind: "mission" } }),
+    onModelPick: (modelId) => {
+      const sc = store.getSnapshot().screen
+      if (sc.kind !== "model_picker") return
+      const chosen = sc.models.find((m) => m.id === modelId)
+      store.update({
+        selectedModel: modelId,
+        selectedModelLabel: chosen?.label ?? modelId,
+        screen: sc.returnTo,
+      })
+      flashToast(store, {
+        kind: "success",
+        text: (env.locale === "zh-Hans" ? "已切换模型：" : "Model: ") + (chosen?.label ?? modelId),
+      })
+    },
+    onSessionPick: ifBooted((s, id: string) => s.handlers.onSessionPick(id)),
+    onPickerClose: () => {
+      const sc = store.getSnapshot().screen
+      if (sc.kind === "model_picker" || sc.kind === "session_list") {
+        store.update({ screen: sc.returnTo })
+      }
+    },
     // Leave an in-progress mission and return to the startup menu. The serve +
     // session keep running in the background; the kid just re-enters from the
     // picker. Mirrors onHelpBack / onPickerBack.
@@ -431,7 +458,7 @@ async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSe
     process.exit(0)
   }
 
-  const handlers = makeFullHandlers(store, env, session, client, serve)
+  const handlers = makeFullHandlers(store, env, session, client, serve, quit)
 
   return { audit, serve, client, session, subscriber, quit, handlers }
 }
@@ -442,6 +469,7 @@ function makeFullHandlers(
   session: SessionManager,
   client: OpencodeClient,
   serve: ServeManager,
+  quit: () => Promise<void>,
 ): FullHandlers {
   const updateLastSession = (): void => {
     writeLastSession(env.configDir, {
@@ -463,6 +491,58 @@ function makeFullHandlers(
         starsBudget: ctx.starsBudget,
         starsBalance: ctx.starsBudget,
       })
+    }
+  }
+
+  const zh = env.locale === "zh-Hans"
+  const sysMessage = (text: string): void => {
+    store.appendMessage({ id: `sys-${Date.now()}`, actor: "system", text, streaming: false, ts: Date.now() })
+  }
+
+  // Handle a kid-safe `/command`. Returns nothing — it mutates the store /
+  // opens a picker. Unknown commands get a friendly nudge toward /help. Note
+  // `/check` + `/done` are handled earlier in onPrompt (completion triggers)
+  // when inside a mission, so they only reach here outside one.
+  const dispatchSlash = async (text: string): Promise<void> => {
+    const parsed = parseSlash(text)
+    const cmd = parsed ? matchCommand(parsed.name) : null
+    if (!cmd) {
+      sysMessage(zh
+        ? `没有「${parsed?.name ?? text}」这个命令。输入 /help 看看能用哪些。`
+        : `No command "${parsed?.name ?? text}". Type /help to see what's available.`)
+      return
+    }
+    switch (cmd.id) {
+      case "help":
+        store.update({ screen: { kind: "help" } })
+        return
+      case "menu":
+        store.update({ screen: { kind: "startup" } })
+        return
+      case "clear":
+        store.update({ messages: [] })
+        return
+      case "new":
+        session.reset()
+        store.update({ messages: [] })
+        flashToast(store, { kind: "success", text: zh ? "开始一段新对话 ✓" : "New chat ✓" })
+        return
+      case "quit":
+        await quit()
+        return
+      case "check":
+        sysMessage(zh ? "先开始一个项目，再用 /check 验收哦。" : "Start a project first, then use /check.")
+        return
+      case "model": {
+        const models = await listModels(client)
+        store.update({ screen: { kind: "model_picker", models, returnTo: store.getSnapshot().screen } })
+        return
+      }
+      case "sessions": {
+        const sessions = await session.list()
+        store.update({ screen: { kind: "session_list", sessions, returnTo: store.getSnapshot().screen } })
+        return
+      }
     }
   }
 
@@ -535,6 +615,11 @@ function makeFullHandlers(
         return
       }
 
+      if (text.trim().startsWith("/")) {
+        await dispatchSlash(text)
+        return
+      }
+
       const hit = env.locale === "zh-Hans" ? detectDangerousTopicZh(text) : detectDangerousTopicEn(text)
       if (hit) {
         store.update({ dangerousTopic: { category: hit, snippet: text } })
@@ -544,7 +629,7 @@ function makeFullHandlers(
       store.update({ thinking: true })
       updateLastSession()
       try {
-        await session.prompt(text)
+        await session.prompt(text, { model: snap.selectedModel ?? undefined })
       } catch (err) {
         store.update({ thinking: false, screen: { kind: "error", variant: "network_down", detail: errMessage(err) } })
       }
@@ -639,6 +724,18 @@ function makeFullHandlers(
       flashToast(store, {
         kind: "success",
         text: env.locale === "zh-Hans" ? `开始：${next.title}` : `Starting: ${next.title}`,
+      })
+    },
+    onSessionPick: (sessionId) => {
+      session.switchTo(sessionId)
+      const sc = store.getSnapshot().screen
+      const back = sc.kind === "session_list" ? sc.returnTo : { kind: "mission" as const }
+      // We continue the session server-side; the local transcript starts clean
+      // (full rehydration of past messages is a later enhancement).
+      store.update({ messages: [], screen: back })
+      flashToast(store, {
+        kind: "info",
+        text: env.locale === "zh-Hans" ? "已切到这段对话，继续聊吧" : "Switched to that chat — keep going",
       })
     },
   }

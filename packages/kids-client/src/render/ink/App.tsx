@@ -24,6 +24,7 @@ import { MissionCompleteScreen } from "./screens/MissionCompleteScreen.tsx"
 import { LoadingScreen } from "./screens/LoadingScreen.tsx"
 import { SetupScreen } from "./screens/SetupScreen.tsx"
 import { TourScreen } from "./screens/TourScreen.tsx"
+import { PickList } from "./components/PickList.tsx"
 import type { ProviderId } from "../../core/setup.ts"
 
 // Variants where the root cause may be a stale / wrong API key or a missing
@@ -60,6 +61,12 @@ export interface AppDeps {
   onMissionBack: () => void
   /** Leave an in-progress mission and return to the startup menu. */
   onMissionExit: () => void
+  /** Pick an AI model from the `/model` picker (id = "provider/model"). */
+  onModelPick: (modelId: string) => void
+  /** Open a past session from the `/sessions` picker. */
+  onSessionPick: (sessionId: string) => void
+  /** Cancel a model/session picker and go back to where it was opened from. */
+  onPickerClose: () => void
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
@@ -156,6 +163,32 @@ function renderScreen(state: ReturnType<Store["getSnapshot"]>, deps: AppDeps): R
           onBack={deps.onMissionBack}
         />
       )
+    case "model_picker": {
+      const zh = deps.locale === "zh-Hans"
+      return (
+        <PickList
+          title={zh ? "选一个 AI 模型" : "Pick an AI model"}
+          items={state.screen.models.map((m) => ({ id: m.id, label: m.label, sublabel: m.id }))}
+          hints={zh ? "[↑↓] 选 · [Enter] 确认 · [Esc] 返回" : "[↑↓] move · [Enter] choose · [Esc] back"}
+          emptyText={zh ? "暂时拿不到模型列表，先用默认的吧。" : "No models available right now — using the default."}
+          onPick={deps.onModelPick}
+          onBack={deps.onPickerClose}
+        />
+      )
+    }
+    case "session_list": {
+      const zh = deps.locale === "zh-Hans"
+      return (
+        <PickList
+          title={zh ? "之前的对话" : "Your past chats"}
+          items={state.screen.sessions.map((s) => ({ id: s.id, label: s.title, sublabel: s.id }))}
+          hints={zh ? "[↑↓] 选 · [Enter] 打开 · [Esc] 返回" : "[↑↓] move · [Enter] open · [Esc] back"}
+          emptyText={zh ? "还没有以前的对话。" : "No earlier chats yet."}
+          onPick={deps.onSessionPick}
+          onBack={deps.onPickerClose}
+        />
+      )
+    }
     case "error":
       return (
         <ErrorScreen

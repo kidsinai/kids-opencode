@@ -24,7 +24,26 @@ export type Screen =
       completionMessage: string
       hasNextMission: boolean
     }
+  // Server-backed pickers, reachable via the `/model` and `/sessions` slash
+  // commands. They carry their fetched list so the router stays a pure
+  // function of state. `returnTo` is the screen to restore on cancel/select.
+  | { kind: "model_picker"; models: ModelChoice[]; returnTo: Screen }
+  | { kind: "session_list"; sessions: SessionSummary[]; returnTo: Screen }
   | { kind: "error"; variant: ErrorVariant; detail?: string }
+
+/** A selectable AI model, flattened from the server's provider list. */
+export interface ModelChoice {
+  /** Full id passed to session.prompt, e.g. "anthropic/claude-3-5-sonnet". */
+  id: string
+  /** Kid-friendly display label. */
+  label: string
+}
+
+/** A past session, from session.list(). */
+export interface SessionSummary {
+  id: string
+  title: string
+}
 
 export type ErrorVariant =
   | "serve_unreachable"
@@ -86,6 +105,10 @@ export interface KidsClientState {
   toast: ToastState | null
   /** Plugin emitted audit events kept for parent dashboard sync (capped). */
   auditBuffer: unknown[]
+  /** Model id chosen via `/model`; null → server default. Passed to prompt(). */
+  selectedModel: string | null
+  /** Kid-friendly label of selectedModel, for display in the header/toast. */
+  selectedModelLabel: string | null
 }
 
 type Listener = (state: KidsClientState) => void
@@ -107,6 +130,8 @@ const INITIAL: KidsClientState = {
   missionTotal: null,
   toast: null,
   auditBuffer: [],
+  selectedModel: null,
+  selectedModelLabel: null,
 }
 
 const AUDIT_BUFFER_CAP = 500

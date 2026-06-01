@@ -14,7 +14,7 @@ interface InputProps {
 export function Input({ value, onChange, onSubmit, placeholder, disabled }: InputProps): React.ReactElement {
   const theme = getTheme()
   return (
-    <Box borderStyle="single" borderColor={theme.fgDim} paddingX={1}>
+    <Box borderStyle="single" borderColor={theme.fgDim} paddingX={1} width="100%">
       <Text color={theme.kid}>💬 </Text>
       {disabled ? (
         <Text color={theme.fgDim} dimColor>
