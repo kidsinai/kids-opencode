@@ -40,17 +40,24 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
   // they're writing, so spacebar must stay a literal space there.
   const canTalk = !state.thinking && state.pendingPermission === null && draft.trim() === "" && voice.ready
 
+  // ← (left arrow) is the kid-facing "go back" key, matching TourScreen's ←.
+  // It only leaves the mission when the input box is empty so it never fights
+  // TextInput's cursor movement mid-typing (same empty-draft gate as talk).
+  //
   // Esc is overloaded so it never eats the kid's typing: while recording it
   // cancels voice; while the AI is thinking it interrupts; with text typed it
-  // clears the draft; when idle + empty it leaves back to the startup menu (so
-  // the kid isn't trapped here — dogfood feedback).
+  // clears the draft; when idle + empty it also leaves back to the startup menu
+  // (so the kid isn't trapped here — dogfood feedback).
+  const canGoBack = !state.thinking && draft.length === 0
   useInput((input, key) => {
     if (voiceBusy) {
       if (key.escape) voice.cancel()
       else if (key.return || input === " ") voice.stopListening()
       return
     }
-    if (key.escape) {
+    if (key.leftArrow && canGoBack) {
+      onExit()
+    } else if (key.escape) {
       if (state.thinking) onAbort()
       else if (draft.length > 0) setDraft("")
       else onExit()
@@ -61,8 +68,8 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
   })
 
   const hint = locale === "zh-Hans"
-    ? "提示：按「空格」对小助手说话 · 打 /check 或「我做完了」验收 · Esc 打断 AI / 返回菜单"
-    : "Tip: press Space to talk · type /check or 'I'm done' to validate · Esc interrupts AI / returns to menu"
+    ? "提示：按「空格」对小助手说话 · 打 /check 或「我做完了」验收 · 按 ← 返回菜单 · AI 在说话时 Esc 打断"
+    : "Tip: press Space to talk · type /check or 'I'm done' to validate · press ← to go back · Esc interrupts the AI while it's talking"
 
   return (
     <Box flexDirection="column" flexGrow={1}>

@@ -67,3 +67,58 @@ describe("MissionScreen voice input", () => {
     expect(lastFrame() ?? "").toContain("💬")
   })
 })
+
+describe("MissionScreen back navigation", () => {
+  const LEFT_ARROW = "[D" // ANSI escape for the ← key
+
+  test("hint advertises ← to go back (zh-Hans)", () => {
+    const { lastFrame } = render(
+      React.createElement(MissionScreen, {
+        state: missionState(),
+        locale: "zh-Hans",
+        onPrompt: () => {},
+        onAbort: () => {},
+        onExit: () => {},
+      }),
+    )
+    expect(lastFrame() ?? "").toContain("按 ← 返回菜单")
+  })
+
+  // ink sets up raw mode asynchronously, so the first keystroke is dropped
+  // unless we let a tick pass after render; it also decodes stdin on a tick.
+  const tick = () => new Promise<void>((r) => setTimeout(r, 20))
+
+  test("← exits to the menu when idle and the input is empty", async () => {
+    let exited = 0
+    const { stdin } = render(
+      React.createElement(MissionScreen, {
+        state: missionState(),
+        locale: "en",
+        onPrompt: () => {},
+        onAbort: () => {},
+        onExit: () => { exited++ },
+      }),
+    )
+    await tick()
+    stdin.write(LEFT_ARROW)
+    await tick()
+    expect(exited).toBe(1)
+  })
+
+  test("← does NOT exit while the AI is thinking (Esc is the interrupt, not back)", async () => {
+    let exited = 0
+    const { stdin } = render(
+      React.createElement(MissionScreen, {
+        state: missionState({ thinking: true }),
+        locale: "en",
+        onPrompt: () => {},
+        onAbort: () => {},
+        onExit: () => { exited++ },
+      }),
+    )
+    await tick()
+    stdin.write(LEFT_ARROW)
+    await tick()
+    expect(exited).toBe(0)
+  })
+})
