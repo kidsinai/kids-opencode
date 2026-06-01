@@ -65,7 +65,7 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
     : "Tip: press Space to talk · type /check or 'I'm done' to validate · Esc interrupts AI / returns to menu"
 
   return (
-    <Box flexDirection="column">
+    <Box flexDirection="column" flexGrow={1}>
       <Header
         packTitle={state.packTitle}
         missionTitle={state.missionTitle}
