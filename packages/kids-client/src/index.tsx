@@ -83,6 +83,37 @@ interface AppHandlers {
 }
 
 async function main(): Promise<void> {
+  // Switch to the terminal's alternate screen buffer so Ink has a clean
+  // canvas. Without this, output that arrived outside Ink — most importantly
+  // the green "Complete authorization…" lines printed by `opencode auth
+  // login` between two execs of kids-client — confuses Ink's cursor
+  // tracking. Every re-render then appends a new frame below the previous
+  // one and the kid sees a cascade of empty bordered boxes piling up as
+  // they navigate the picker or as messages stream in (the bug surfaced in
+  // the workshop dogfood of the project-types picker, where the AI's reply
+  // streamed entirely off-screen). The "exit" listener restores the original
+  // terminal contents (incl. scrollback) on every exit path that Node fires
+  // — normal completion, process.exit(N) (used for the OAuth handoff), and
+  // signal-driven exit when we've installed the signal handlers below.
+  // Skipped under CI / non-TTY stdout so test output isn't littered with
+  // control codes.
+  if (process.stdout.isTTY) {
+    process.stdout.write("\x1b[?1049h\x1b[H")
+    const restore = (): void => {
+      try { process.stdout.write("\x1b[?1049l") } catch { /* terminal already closed */ }
+    }
+    process.on("exit", restore)
+    // SIGINT / SIGTERM don't fire 'exit' by default; install passthrough
+    // handlers so Ctrl+C doesn't leave the terminal stuck on the alt buffer.
+    for (const sig of ["SIGINT", "SIGTERM", "SIGHUP"] as const) {
+      process.once(sig, () => {
+        restore()
+        // Re-raise so the parent shell sees the conventional signal-exit code.
+        process.exit(128 + (sig === "SIGINT" ? 2 : sig === "SIGTERM" ? 15 : 1))
+      })
+    }
+  }
+
   const env: KidsClientEnv = readEnv()
   const store = new Store()
   const installedPacks = listInstalledPacks()
