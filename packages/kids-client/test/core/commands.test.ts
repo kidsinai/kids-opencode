@@ -35,6 +35,10 @@ describe("matchCommand", () => {
   test("returns null for unknown", () => {
     expect(matchCommand("/banana")).toBeNull()
   })
+
+  test("includes the new /compact command", () => {
+    expect(matchCommand("/compact")?.id).toBe("compact")
+  })
 })
 
 describe("filterCommands", () => {

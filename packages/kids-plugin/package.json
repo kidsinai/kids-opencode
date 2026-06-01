@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@kidsinai/kids-opencode-plugin",
-  "version": "0.0.20",
+  "version": "0.0.21",
   "type": "module",
   "description": "opencode plugin that turns opencode into a kid-safe coding mentor: kid-safe system prompt, tool whitelist (no shell), DeepRouter routing, audit emission.",
   "license": "MIT",

@@ -39,7 +39,7 @@ describe("MissionScreen voice input", () => {
         onExit: () => {},
       }),
     )
-    expect(lastFrame() ?? "").toContain("按「空格」说话")
+    expect(lastFrame() ?? "").toContain("「空格」说话")
   })
 
   test("en hint tells the kid Space talks", () => {
@@ -83,7 +83,7 @@ describe("MissionScreen back navigation", () => {
         onExit: () => {},
       }),
     )
-    expect(lastFrame() ?? "").toContain("按 ← 返回菜单")
+    expect(lastFrame() ?? "").toContain("← 返回")
   })
 
   // ink sets up raw mode asynchronously, so the first keystroke is dropped

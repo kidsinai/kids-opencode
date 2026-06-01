@@ -32,6 +32,7 @@ import { readLastSession, writeLastSession } from "./core/last-session.ts"
 import { isCompletionTrigger, runCheck } from "./core/check-runner.ts"
 import { parseSlash, matchCommand } from "./core/commands.ts"
 import { listModels } from "./core/models.ts"
+import { findFiles } from "./core/files.ts"
 import { App } from "./render/ink/App.tsx"
 import { FREE_PLAY_PACK_ID } from "./render/ink/screens/CoursePackPicker.tsx"
 import { detectDangerousTopicEn, detectDangerousTopicZh } from "./dangerous-topic-bridge.ts"
@@ -61,6 +62,7 @@ interface FullHandlers {
   onPickPack: (packId: string) => void
   onMissionNext: () => void
   onSessionPick: (sessionId: string) => void
+  onFindFiles: (query: string) => Promise<string[]>
 }
 
 interface AppHandlers {
@@ -81,6 +83,7 @@ interface AppHandlers {
   onModelPick: (modelId: string) => void
   onSessionPick: (sessionId: string) => void
   onPickerClose: () => void
+  onFindFiles: (query: string) => Promise<string[]>
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
@@ -251,6 +254,10 @@ function makeHandlers(
       })
     },
     onSessionPick: ifBooted((s, id: string) => s.handlers.onSessionPick(id)),
+    onFindFiles: async (query: string) => {
+      const s = servicesHolder.current
+      return s ? s.handlers.onFindFiles(query) : []
+    },
     onPickerClose: () => {
       const sc = store.getSnapshot().screen
       if (sc.kind === "model_picker" || sc.kind === "session_list") {
@@ -522,6 +529,18 @@ function makeFullHandlers(
       case "clear":
         store.update({ messages: [] })
         return
+      case "compact":
+        if (!session.getId()) {
+          sysMessage(zh ? "还没有对话可以压缩。" : "No chat to shrink yet.")
+          return
+        }
+        try {
+          await session.compact()
+          flashToast(store, { kind: "success", text: zh ? "对话已压缩 ✓" : "Chat shrunk ✓" })
+        } catch {
+          flashToast(store, { kind: "warn", text: zh ? "压缩没成功,稍后再试" : "Couldn't shrink — try again later" })
+        }
+        return
       case "new":
         session.reset()
         store.update({ messages: [] })
@@ -726,18 +745,24 @@ function makeFullHandlers(
         text: env.locale === "zh-Hans" ? `开始：${next.title}` : `Starting: ${next.title}`,
       })
     },
-    onSessionPick: (sessionId) => {
-      session.switchTo(sessionId)
+    onSessionPick: async (sessionId) => {
       const sc = store.getSnapshot().screen
       const back = sc.kind === "session_list" ? sc.returnTo : { kind: "mission" as const }
-      // We continue the session server-side; the local transcript starts clean
-      // (full rehydration of past messages is a later enhancement).
+      // Show the chat immediately (loading), then rehydrate the transcript from
+      // the server so the kid sees what was said before.
       store.update({ messages: [], screen: back })
+      try {
+        const past = await session.loadMessages(sessionId)
+        store.setMessages(past)
+      } catch {
+        session.switchTo(sessionId) // at least continue it even if rehydrate failed
+      }
       flashToast(store, {
         kind: "info",
-        text: env.locale === "zh-Hans" ? "已切到这段对话，继续聊吧" : "Switched to that chat — keep going",
+        text: env.locale === "zh-Hans" ? "打开了这段对话" : "Opened that chat",
       })
     },
+    onFindFiles: (query) => findFiles(client, query),
   }
 }
 
