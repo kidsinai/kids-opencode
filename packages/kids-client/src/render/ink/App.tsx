@@ -10,6 +10,7 @@
  */
 
 import React, { useSyncExternalStore } from "react"
+import { Box, useStdout } from "ink"
 import type { InstalledPack } from "../../core/course-pack.ts"
 import type { ErrorVariant, Store } from "../../core/store.ts"
 import { StartupScreen } from "./screens/StartupScreen.tsx"
@@ -79,14 +80,35 @@ export function App(deps: AppDeps): React.ReactElement {
     () => deps.store.getSnapshot(),
     () => deps.store.getSnapshot(),
   )
+  // Pin the App's footprint to the terminal's full dimensions. Without
+  // this, MissionScreen's `flexGrow={1}` middle box (chat + spinner) made
+  // the App's TOTAL rendered height shift by ±1 line on every keystroke /
+  // spinner tick / streaming chunk. Ink's diff move-cursor-up-by-N then
+  // used a stale N from the previous frame, so each new frame got drawn
+  // one row LOWER than the last — leaving the previous frame's top
+  // border behind. Result: a cascade of ┌──┐ stripes piling up above the
+  // Header. With width+height fixed to the terminal, the App's footprint
+  // never changes between renders and Ink's diff stays correct.
+  const { stdout } = useStdout()
+  const width = stdout?.columns && stdout.columns > 4 ? stdout.columns : 80
+  // -1 to leave a row for the terminal cursor / status; without it some
+  // terminals scroll the App by one line on the first render.
+  const height = stdout?.rows && stdout.rows > 4 ? stdout.rows - 1 : 23
 
+  const screen = renderScreen(state, deps)
+  return (
+    <Box width={width} height={height} flexDirection="column">
+      {screen}
+    </Box>
+  )
+}
+
+function renderScreen(state: ReturnType<Store["getSnapshot"]>, deps: AppDeps): React.ReactElement | null {
   // Dangerous-topic overlay takes absolute priority — it has to be the
   // first thing on screen the moment a pattern hits, even mid-stream.
   if (state.dangerousTopic) {
     return <DangerousTopicModal topic={state.dangerousTopic} locale={deps.locale} onAcknowledge={deps.onDangerousAcknowledge} />
   }
-
-  // Permission modal is the next-highest priority.
   if (state.pendingPermission) {
     return (
       <PermissionModal
@@ -98,7 +120,6 @@ export function App(deps: AppDeps): React.ReactElement {
       />
     )
   }
-
   switch (state.screen.kind) {
     case "loading":
       return <LoadingScreen locale={deps.locale} message={state.screen.message} />
@@ -149,4 +170,5 @@ export function App(deps: AppDeps): React.ReactElement {
         />
       )
   }
+  return null
 }
