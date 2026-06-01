@@ -68,7 +68,7 @@ export class SessionManager {
     const id = extractId(result)
     if (!id) throw new Error("SDK v2 session.create returned no id")
     this.currentSessionId = id
-    debug("session.create: id", id)
+    debug("session.create: id", { id })
     return id
   }
 
