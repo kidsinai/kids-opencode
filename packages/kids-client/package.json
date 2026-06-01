@@ -24,7 +24,8 @@
   "files": ["src", "bin", "README.md", "LICENSE"],
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "test": "bun test"
+    "test": "bun test",
+    "voice-demo": "bun src/voice-demo.tsx"
   },
   "peerDependencies": {
     "@opencode-ai/sdk": ">=1.14.0"

@@ -17,6 +17,7 @@ import { Input } from "../components/Input.tsx"
 import { Thinking } from "../components/Thinking.tsx"
 import { Toast } from "../components/Toast.tsx"
 import { getTheme } from "../theme.ts"
+import { useVoiceInput } from "../useVoiceInput.ts"
 import type { KidsClientState } from "../../../core/store.ts"
 
 interface MissionScreenProps {
@@ -33,20 +34,35 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
   const [draft, setDraft] = useState("")
   const placeholder = locale === "zh-Hans" ? "想做什么？告诉我吧（中文/英文都行）" : "What would you like to make? (English or Chinese)"
 
-  // Esc is overloaded so it never eats the kid's typing: while the AI is
-  // thinking it interrupts; with text typed it clears the draft; when idle and
-  // empty it leaves the mission back to the startup menu (so the kid isn't
-  // trapped here — dogfood feedback).
-  useInput((_, key) => {
-    if (!key.escape) return
-    if (state.thinking) onAbort()
-    else if (draft.length > 0) setDraft("")
-    else onExit()
+  const voice = useVoiceInput(onPrompt)
+  const voiceBusy = voice.voiceState !== "idle"
+  // Spacebar talks ONLY when the kid isn't mid-typing — a non-empty draft means
+  // they're writing, so spacebar must stay a literal space there.
+  const canTalk = !state.thinking && state.pendingPermission === null && draft.trim() === "" && voice.ready
+
+  // Esc is overloaded so it never eats the kid's typing: while recording it
+  // cancels voice; while the AI is thinking it interrupts; with text typed it
+  // clears the draft; when idle + empty it leaves back to the startup menu (so
+  // the kid isn't trapped here — dogfood feedback).
+  useInput((input, key) => {
+    if (voiceBusy) {
+      if (key.escape) voice.cancel()
+      else if (key.return || input === " ") voice.stopListening()
+      return
+    }
+    if (key.escape) {
+      if (state.thinking) onAbort()
+      else if (draft.length > 0) setDraft("")
+      else onExit()
+    } else if (input === " " && canTalk) {
+      setDraft("")
+      voice.startListening()
+    }
   })
 
   const hint = locale === "zh-Hans"
-    ? "提示：做完一关时打 /check 或「我做完了」就能验收 · 按 Esc 打断 AI / 返回菜单"
-    : "Tip: type /check or 'I'm done' to validate · Esc interrupts the AI / returns to menu"
+    ? "提示：按「空格」对小助手说话 · 打 /check 或「我做完了」验收 · Esc 打断 AI / 返回菜单"
+    : "Tip: press Space to talk · type /check or 'I'm done' to validate · Esc interrupts AI / returns to menu"
 
   return (
     <Box flexDirection="column">
@@ -67,18 +83,22 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
         )}
       </Box>
       <Box marginTop={1}>
-        <Input
-          value={draft}
-          onChange={setDraft}
-          onSubmit={(v) => {
-            const text = v.trim()
-            if (!text) return
-            setDraft("")
-            onPrompt(text)
-          }}
-          placeholder={placeholder}
-          disabled={state.thinking || state.pendingPermission !== null}
-        />
+        {voiceBusy ? (
+          <VoiceBar voiceState={voice.voiceState} meter={voice.meter} mode={voice.mode} locale={locale} theme={theme} />
+        ) : (
+          <Input
+            value={draft}
+            onChange={setDraft}
+            onSubmit={(v) => {
+              const text = v.trim()
+              if (!text) return
+              setDraft("")
+              onPrompt(text)
+            }}
+            placeholder={placeholder}
+            disabled={state.thinking || state.pendingPermission !== null}
+          />
+        )}
       </Box>
       {state.toast ? (
         <Box marginTop={1}>
@@ -87,6 +107,44 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
       ) : (
         <Box marginTop={1}>
           <Text color={theme.fgDim} dimColor>{hint}</Text>
+        </Box>
+      )}
+    </Box>
+  )
+}
+
+interface VoiceBarProps {
+  voiceState: ReturnType<typeof useVoiceInput>["voiceState"]
+  meter: string
+  mode: "deeprouter" | "mock"
+  locale: "zh-Hans" | "en"
+  theme: ReturnType<typeof getTheme>
+}
+
+/** Replaces the input box while a voice turn is in flight: shows the mic
+ *  indicator + live meter while listening, and a status line otherwise. */
+function VoiceBar({ voiceState, meter, mode, locale, theme }: VoiceBarProps): React.ReactElement {
+  const zh = locale === "zh-Hans"
+  const label =
+    voiceState === "listening"
+      ? zh ? "🎙 听你说…（再按空格 或 回车 结束，Esc 取消）" : "🎙 Listening… (Space/Enter to finish, Esc to cancel)"
+      : voiceState === "transcribing"
+        ? zh ? "✍️ 正在听懂你说的话…" : "✍️ Figuring out what you said…"
+        : voiceState === "error"
+          ? zh ? "😅 没听清，按空格再试一次" : "😅 Didn't catch that — press Space to retry"
+          : zh ? "小助手在想…" : "Thinking…"
+
+  return (
+    <Box borderStyle="single" borderColor={theme.kid} paddingX={1} flexDirection="column">
+      <Box>
+        <Text color={theme.kid}>{label}</Text>
+      </Box>
+      {voiceState === "listening" && (
+        <Box>
+          <Text color={theme.accent}>{meter}</Text>
+          {mode === "mock" && (
+            <Text color={theme.fgDim} dimColor>{zh ? "  （演示模式）" : "  (demo mode)"}</Text>
+          )}
         </Box>
       )}
     </Box>
