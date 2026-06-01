@@ -8,6 +8,23 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+## [0.0.17] — 2026-05-31
+
+Dogfood-driven bugfix release. 0.0.16 was unusable — the AI engine never started — plus several
+TUI usability problems. All four packages bumped in lock-step to 0.0.17.
+
+### Fixed
+- **AI engine never started (`event stream failed … undefined is not a function (near '…raw of stream…')`)** — `EventSubscriber.consume()` iterated `client.global.event()` directly, but the `@opencode-ai/sdk` (≥1.14.x, against opencode 1.15.1) returns `Promise<ServerSentEventsResult<…>>` (`{ data, stream }`), not a bare async-iterable. `for await … of` on a Promise threw, the subscriber retried 11× then surfaced "AI teacher didn't start". Now awaits the call and extracts the async-iterable via a `pickAsyncIterable()` helper that tolerates all three SDK shapes (`events.ts`).
+- **Misleading "AI teacher didn't start" on a *dropped* stream** — the post-connection `onDisconnected` path reused the `serve_unreachable` error but with a detail that implied a failed startup. Detail now reads "lost connection to the AI engine after it started — …" so a mid-session drop isn't mistaken for a boot failure (`index.tsx`).
+- **Cascading border render bug** in `Header` + `CoursePackPicker` that garbled the layout.
+- **Ink output corruption** — the TUI now renders into the terminal's alt-screen buffer so stray stdout from the engine no longer bleeds into the UI.
+- **OAuth provider sign-in** — auto-open the OAuth URL with a copy-paste fallback when the browser can't be launched (`bin/kids-opencode`).
+
+### Changed
+- **Higher-contrast default theme (D)** — dark-terminal secondary text was `gray`/`blackBright`, near-invisible on many themes. `DARK` now uses `whiteBright` primary + `white` secondary so body copy actually reads. `COLORFGBG` auto-detect and the `KIDS_THEME=hc|dark|light` override are unchanged.
+- **Back / quit navigation (C)** — kids were trapped after picking a project. `MissionScreen` now leaves to the startup menu on `Esc` when idle (still interrupts the AI while thinking, still clears a half-typed draft first). `StartupScreen` gains a `[q]` quit. Mirrors the existing `Esc`-to-back pattern in `CoursePackPicker` / `HelpScreen`.
+- **OpenAI provider label (B)** — dropped the stray Chinese from the otherwise-English label; now reads "OpenAI GPT (sign in with ChatGPT Plus/Pro)".
+
 ## [0.0.16] — 2026-05-31
 
 First lock-step release of all four packages under a single version: the CLI (`@kidsinai/kids-opencode`), client (`@kidsinai/kids-client`), plugin (`@kidsinai/kids-opencode-plugin`), and TUI plugin (`@kidsinai/kids-opencode-tui-plugin`). Headline feature is the project-type picker + guided flow.

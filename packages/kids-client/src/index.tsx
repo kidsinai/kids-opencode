@@ -74,6 +74,7 @@ interface AppHandlers {
   onPickerBack: () => void
   onMissionNext: () => void
   onMissionBack: () => void
+  onMissionExit: () => void
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
@@ -229,6 +230,10 @@ function makeHandlers(
     onPickerBack: () => store.update({ screen: { kind: "startup" } }),
     onMissionNext: ifBooted((s) => s.handlers.onMissionNext()),
     onMissionBack: () => store.update({ screen: { kind: "mission" } }),
+    // Leave an in-progress mission and return to the startup menu. The serve +
+    // session keep running in the background; the kid just re-enters from the
+    // picker. Mirrors onHelpBack / onPickerBack.
+    onMissionExit: () => store.update({ screen: { kind: "startup" } }),
     onSetupSave: async (provider, apiKey) => {
       try {
         saveSetup({ configDir: env.configDir, provider, apiKey })
@@ -398,7 +403,17 @@ async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSe
       })
     },
     onDisconnected: (reason) => {
-      store.update({ screen: { kind: "error", variant: "serve_unreachable", detail: reason } })
+      // This fires after the engine was already reachable, so the failure is a
+      // dropped event stream, not a failed startup. Make the detail say so —
+      // the variant's title still reads "AI teacher didn't start", but the
+      // detail keeps it from being misleading.
+      store.update({
+        screen: {
+          kind: "error",
+          variant: "serve_unreachable",
+          detail: `lost connection to the AI engine after it started — ${reason}`,
+        },
+      })
     },
     onReconnected: () => {
       flashToast(store, {

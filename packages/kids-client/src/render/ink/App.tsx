@@ -57,6 +57,8 @@ export interface AppDeps {
   onPickerBack: () => void
   onMissionNext: () => void
   onMissionBack: () => void
+  /** Leave an in-progress mission and return to the startup menu. */
+  onMissionExit: () => void
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
@@ -105,9 +107,9 @@ export function App(deps: AppDeps): React.ReactElement {
     case "tour":
       return <TourScreen locale={deps.locale} onDone={deps.onTourDone} />
     case "startup":
-      return <StartupScreen locale={deps.locale} coursePack={state.coursePack} toast={state.toast} onStart={deps.onStart} onOpenWallet={deps.onOpenWallet} />
+      return <StartupScreen locale={deps.locale} coursePack={state.coursePack} toast={state.toast} onStart={deps.onStart} onOpenWallet={deps.onOpenWallet} onQuit={deps.onQuit} />
     case "mission":
-      return <MissionScreen state={state} locale={deps.locale} onPrompt={deps.onPrompt} onAbort={deps.onAbort} />
+      return <MissionScreen state={state} locale={deps.locale} onPrompt={deps.onPrompt} onAbort={deps.onAbort} onExit={deps.onMissionExit} />
     case "help":
       return <HelpScreen locale={deps.locale} onBack={deps.onHelpBack} />
     case "course_picker":
