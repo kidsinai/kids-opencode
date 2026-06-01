@@ -26,8 +26,17 @@ export function Header({ packTitle, missionTitle, missionIndex, missionTotal, st
     starsBudget > 0
       ? `⭐ ${starsBalance}/${starsBudget}`
       : `⭐ ${starsBalance}`
+  // borderStyle="round" + justifyContent="space-between" without an explicit
+  // width caused a cascade of stacked top-borders under Ink 5 + Bun — the
+  // Header re-rendered on every keystroke / spinner tick with a slightly
+  // different computed width, and Ink's diff failed to clear the old top
+  // border. Forcing width to the current terminal column count locks the
+  // measurement, and "single" border chars sidestep the rounded-corner
+  // width-counting glitch we hit in workshop dogfood (round corners stay
+  // available on Setup / Tour / Help screens which don't re-render rapidly).
+  const width = process.stdout.columns && process.stdout.columns > 4 ? process.stdout.columns : 80
   return (
-    <Box borderStyle="round" borderColor={theme.border} paddingX={1} justifyContent="space-between">
+    <Box borderStyle="single" borderColor={theme.border} paddingX={1} justifyContent="space-between" width={width}>
       <Text color={theme.accent}>{left}</Text>
       <Text color={theme.stars}>{stars}</Text>
     </Box>

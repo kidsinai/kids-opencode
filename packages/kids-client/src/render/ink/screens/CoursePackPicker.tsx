@@ -48,7 +48,7 @@ export function CoursePackPicker({ locale, packs, onPick, onBack }: CoursePackPi
     // Course Pack install is broken — surface it loudly, but still let the kid
     // drop into free-play via the synthetic entry.
     return (
-      <Box flexDirection="column" borderStyle="round" borderColor={theme.warn} paddingX={2} paddingY={1}>
+      <Box flexDirection="column" borderStyle="single" borderColor={theme.warn} paddingX={2} paddingY={1} width={process.stdout.columns && process.stdout.columns > 4 ? process.stdout.columns : 80}>
         <Text color={theme.warn} bold>{t.empty}</Text>
         <Box marginTop={1}>
           <Text color={theme.fgDim}>{t.emptyHint}</Text>
@@ -60,7 +60,7 @@ export function CoursePackPicker({ locale, packs, onPick, onBack }: CoursePackPi
     )
   }
   return (
-    <Box flexDirection="column" borderStyle="round" borderColor={theme.accent} paddingX={2} paddingY={1}>
+    <Box flexDirection="column" borderStyle="single" borderColor={theme.accent} paddingX={2} paddingY={1} width={process.stdout.columns && process.stdout.columns > 4 ? process.stdout.columns : 80}>
       <Text color={theme.accent} bold>{t.title}</Text>
       <Box marginTop={1} flexDirection="column">
         {rows.map((row, i) => {
