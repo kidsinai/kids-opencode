@@ -159,6 +159,12 @@ export class Store {
     this.notify()
   }
 
+  /** Replace the whole transcript at once (used when rehydrating a past session). */
+  setMessages(messages: ChatMessage[]): void {
+    this.state = { ...this.state, messages }
+    this.notify()
+  }
+
   appendDelta(messageId: string, delta: string): void {
     const messages = this.state.messages.map((m) =>
       m.id === messageId ? { ...m, text: m.text + delta } : m,

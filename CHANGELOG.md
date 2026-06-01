@@ -8,6 +8,20 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+## [0.0.21] — 2026-06-01
+
+### Added (UX parity, phase A)
+- **Input history** — `↑` in the mission input recalls earlier prompts (`↓` walks forward),
+  gated to an empty box so it never fights typing. History persists across the session.
+- **`@file` mentions** — typing `@` autocompletes project files (`find.files`) above the input;
+  the kid names a file and the AI reads it via the existing `read` tool (no new capability, kid-safe).
+  New `core/files.ts` + `FileSuggestions` component.
+- **`/sessions` now rehydrates the transcript** — opening a past chat loads its messages
+  (`session.messages`, mapped user→kid / assistant-text→agent) instead of starting blank.
+- **`/compact`** — shrink a long chat server-side (`session.compact`) to save space.
+
+(Phase B — richer code/markdown rendering — and phase C — scrollback / multi-line — to follow.)
+
 ## [0.0.20] — 2026-06-01
 
 ### Fixed

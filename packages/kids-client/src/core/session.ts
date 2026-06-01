@@ -10,7 +10,7 @@
  */
 
 import type { OpencodeClient } from "./connection.ts"
-import type { SessionSummary } from "./store.ts"
+import type { SessionSummary, ChatMessage } from "./store.ts"
 import { debug } from "./debug.ts"
 
 /**
@@ -57,6 +57,33 @@ export class SessionManager {
   /** Continue an existing session: subsequent prompt()s append to it. */
   switchTo(sessionID: string): void {
     this.currentSessionId = sessionID
+  }
+
+  /**
+   * Load a past session's transcript as ChatMessages (for `/sessions`
+   * rehydration) AND make it current. user → kid, assistant → agent (text parts
+   * joined); tool/reasoning/control messages are skipped. Defensive: an
+   * unavailable endpoint just yields an empty transcript.
+   */
+  async loadMessages(sessionID: string): Promise<ChatMessage[]> {
+    this.currentSessionId = sessionID
+    const api = (this.client as unknown as { session?: { messages?: (p: unknown) => Promise<unknown> } }).session
+    if (typeof api?.messages !== "function") return []
+    let raw: unknown
+    try {
+      raw = await api.messages({ sessionID, order: "asc", limit: 200 })
+    } catch {
+      return []
+    }
+    return unwrapItems(raw).map(mapServerMessage).filter((m): m is ChatMessage => m !== null)
+  }
+
+  /** Compress a long session server-side (the `/compact` command). */
+  async compact(): Promise<void> {
+    if (!this.currentSessionId) return
+    const api = (this.client as unknown as { session?: { compact?: (p: unknown, o?: unknown) => Promise<unknown> } }).session
+    if (typeof api?.compact !== "function") throw new Error("SDK: session.compact unavailable")
+    await api.compact({ sessionID: this.currentSessionId }, SDK_THROW)
   }
 
   async create(): Promise<string> {
@@ -132,6 +159,43 @@ function splitModelId(id: string | undefined): { providerID: string; modelID: st
   const slash = id.indexOf("/")
   if (slash <= 0 || slash === id.length - 1) return undefined
   return { providerID: id.slice(0, slash), modelID: id.slice(slash + 1) }
+}
+
+/** session.messages returns `{ items }` or `{ data: { items } }`. */
+function unwrapItems(result: unknown): unknown[] {
+  if (result && typeof result === "object") {
+    const r = result as { items?: unknown; data?: { items?: unknown } }
+    if (Array.isArray(r.items)) return r.items
+    if (Array.isArray(r.data?.items)) return r.data!.items as unknown[]
+  }
+  return []
+}
+
+/** Map a server SessionMessage to our ChatMessage; null = skip (tool/control). */
+export function mapServerMessage(m: unknown): ChatMessage | null {
+  if (!m || typeof m !== "object") return null
+  const o = m as {
+    id?: string
+    type?: string
+    text?: string
+    content?: Array<{ type?: string; text?: string }>
+    time?: { created?: number }
+  }
+  const id = o.id ?? `srv-${o.time?.created ?? 0}`
+  const ts = typeof o.time?.created === "number" ? o.time.created : 0
+  if (o.type === "user" && typeof o.text === "string") {
+    return { id, actor: "kid", text: o.text, streaming: false, ts }
+  }
+  if (o.type === "assistant" && Array.isArray(o.content)) {
+    const text = o.content
+      .filter((p) => p?.type === "text" && typeof p.text === "string")
+      .map((p) => p.text)
+      .join("")
+      .trim()
+    if (!text) return null
+    return { id, actor: "agent", text, streaming: false, ts }
+  }
+  return null
 }
 
 /** SDK list responses come back as `T[]` or `{ data: T[] }` across versions. */

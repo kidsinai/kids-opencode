@@ -67,6 +67,8 @@ export interface AppDeps {
   onSessionPick: (sessionId: string) => void
   /** Cancel a model/session picker and go back to where it was opened from. */
   onPickerClose: () => void
+  /** Autocomplete project files for an `@mention`. */
+  onFindFiles: (query: string) => Promise<string[]>
   onSetupSave: (provider: ProviderId, apiKey: string) => Promise<{ ok: true } | { ok: false; reason: string }>
   onSetupContinue: () => Promise<void>
   onSetupSkip: () => void
@@ -137,7 +139,7 @@ function renderScreen(state: ReturnType<Store["getSnapshot"]>, deps: AppDeps): R
     case "startup":
       return <StartupScreen locale={deps.locale} coursePack={state.coursePack} toast={state.toast} onStart={deps.onStart} onOpenWallet={deps.onOpenWallet} onQuit={deps.onQuit} />
     case "mission":
-      return <MissionScreen state={state} locale={deps.locale} onPrompt={deps.onPrompt} onAbort={deps.onAbort} onExit={deps.onMissionExit} />
+      return <MissionScreen state={state} locale={deps.locale} onPrompt={deps.onPrompt} onAbort={deps.onAbort} onExit={deps.onMissionExit} onFindFiles={deps.onFindFiles} />
     case "help":
       return <HelpScreen locale={deps.locale} onBack={deps.onHelpBack} />
     case "course_picker":
