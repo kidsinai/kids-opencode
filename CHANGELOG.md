@@ -8,6 +8,31 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+## [0.0.19] — 2026-06-01
+
+### Added
+- **Slash commands + `/` palette in the mission screen.** kids-client is a custom kid-safe TUI (not
+  opencode's native one), so it grows its own command set. Type `/` and a live, filtered suggestion
+  list appears above the input; finish the command and press Enter. Commands: `/help`, `/model`,
+  `/sessions` (a.k.a. `/history`), `/new`, `/check` (+`/done`), `/clear`, `/menu` (`/home`), `/quit`.
+  New `core/commands.ts` registry (pure + unit-tested) and an inline `CommandSuggestions` component.
+- **`/model` picker (server-backed).** Lists the server's available models (`provider.list()`,
+  flattened kid-friendly via `core/models.ts`) in a full-width picker; the choice is remembered and
+  passed through `session.prompt({ model })` on every following turn. New `ModelChoice` state +
+  `PickList` component.
+- **`/sessions` history (server-backed).** Lists past sessions (`session.list()`); picking one
+  continues it server-side (`session.switchTo`). Transcript rehydration of older messages is a
+  later enhancement — for now the local view starts clean with a "switched" toast.
+
+### Changed
+- **Input box is now full-width** (`width: 100%`) so it matches the header instead of taking half
+  the row.
+
+### Notes
+- Deliberately **excluded for kid-safety**: `/share` (public links), `/editor` / drop-to-shell,
+  external `@`-mentions, arbitrary `config` edits. The server-side tool whitelist already blocks the
+  dangerous primitives; these affordances are simply not surfaced.
+
 ## [0.0.18] — 2026-05-31
 
 ### Added

@@ -16,6 +16,7 @@ import { ChatStream } from "../components/ChatStream.tsx"
 import { Input } from "../components/Input.tsx"
 import { Thinking } from "../components/Thinking.tsx"
 import { Toast } from "../components/Toast.tsx"
+import { CommandSuggestions } from "../components/CommandSuggestions.tsx"
 import { getTheme } from "../theme.ts"
 import { useVoiceInput } from "../useVoiceInput.ts"
 import type { KidsClientState } from "../../../core/store.ts"
@@ -68,8 +69,8 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
   })
 
   const hint = locale === "zh-Hans"
-    ? "提示：按「空格」对小助手说话 · 打 /check 或「我做完了」验收 · 按 ← 返回菜单 · AI 在说话时 Esc 打断"
-    : "Tip: press Space to talk · type /check or 'I'm done' to validate · press ← to go back · Esc interrupts the AI while it's talking"
+    ? "提示：打 / 看命令 · 按「空格」说话 · 「我做完了」验收 · 按 ← 返回菜单 · AI 说话时 Esc 打断"
+    : "Tip: type / for commands · Space to talk · 'I'm done' to validate · ← to go back · Esc interrupts the AI"
 
   return (
     <Box flexDirection="column" flexGrow={1}>
@@ -89,6 +90,11 @@ export function MissionScreen({ state, locale, onPrompt, onAbort, onExit }: Miss
           </Box>
         )}
       </Box>
+      {!voiceBusy && draft.trim().startsWith("/") && (
+        <Box marginTop={1}>
+          <CommandSuggestions query={draft} locale={locale} />
+        </Box>
+      )}
       <Box marginTop={1}>
         {voiceBusy ? (
           <VoiceBar voiceState={voice.voiceState} meter={voice.meter} mode={voice.mode} locale={locale} theme={theme} />

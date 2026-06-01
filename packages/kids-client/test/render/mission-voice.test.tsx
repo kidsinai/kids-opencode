@@ -22,6 +22,8 @@ function missionState(over: Partial<KidsClientState> = {}): KidsClientState {
     missionTotal: 3,
     toast: null,
     auditBuffer: [],
+    selectedModel: null,
+    selectedModelLabel: null,
     ...over,
   }
 }
@@ -37,7 +39,7 @@ describe("MissionScreen voice input", () => {
         onExit: () => {},
       }),
     )
-    expect(lastFrame() ?? "").toContain("按「空格」对小助手说话")
+    expect(lastFrame() ?? "").toContain("按「空格」说话")
   })
 
   test("en hint tells the kid Space talks", () => {
@@ -50,7 +52,7 @@ describe("MissionScreen voice input", () => {
         onExit: () => {},
       }),
     )
-    expect(lastFrame() ?? "").toContain("press Space to talk")
+    expect(lastFrame() ?? "").toContain("Space to talk")
   })
 
   test("input box renders while idle (voice not engaged)", () => {

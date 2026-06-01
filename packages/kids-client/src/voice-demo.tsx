@@ -37,6 +37,8 @@ function baseState(messages: ChatMessage[]): KidsClientState {
     missionTotal: 1,
     toast: null,
     auditBuffer: [],
+    selectedModel: null,
+    selectedModelLabel: null,
   }
 }
 
