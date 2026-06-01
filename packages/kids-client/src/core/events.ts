@@ -67,15 +67,23 @@ export class EventSubscriber {
   }
 
   private async consume(): Promise<void> {
-    // The SDK exposes the SSE stream via client.global.event(). Shape varies
-    // between SDK minor versions (some return async iterable, some a stream
-    // helper). We use the duck-typed iterable path.
-    const eventApi = (this.client as unknown as { global?: { event: () => AsyncIterable<unknown> } }).global
+    // The SDK exposes the SSE stream via client.global.event(). The shape
+    // has changed across SDK versions:
+    //   • old: event() returns an AsyncIterable directly
+    //   • new (>=1.14.51): event() returns Promise<{ stream: AsyncGenerator }>
+    // Handle both. The error "undefined is not a function (near '...raw of
+    // stream...')" came from `for await`-ing a Promise (the new shape) under
+    // the old code path.
+    const eventApi = (this.client as unknown as { global?: { event: (...a: unknown[]) => unknown } }).global
     if (!eventApi || typeof eventApi.event !== "function") {
       throw new Error("@opencode-ai/sdk/v2: client.global.event() not available — SDK version drift")
     }
-    const stream = eventApi.event()
-    for await (const raw of stream) {
+    const result = await Promise.resolve(eventApi.event())
+    const iterable = pickAsyncIterable(result)
+    if (!iterable) {
+      throw new Error(`@opencode-ai/sdk/v2: client.global.event() returned an unrecognised shape: ${describeShape(result)}`)
+    }
+    for await (const raw of iterable) {
       if (this.abort.signal.aborted) return
       if (this.retries > 0) {
         this.retries = 0
@@ -86,8 +94,19 @@ export class EventSubscriber {
   }
 
   private dispatch(raw: unknown): void {
-    const env = raw as { payload?: { type?: string } & Record<string, unknown> }
-    const payload = env?.payload
+    // Across SDK versions an event is either:
+    //   • { payload: { type, …fields } }            (older shape)
+    //   • { type, …fields }                          (newer shape — yielded
+    //                                                  directly by the
+    //                                                  AsyncGenerator)
+    //   • { data: { type, …fields } } (StreamEvent wrapper from some helpers)
+    // Unwrap to a single `payload` view so the switch below stays the same.
+    const e = raw as { payload?: Record<string, unknown>; data?: Record<string, unknown>; type?: string } & Record<string, unknown>
+    const payload: ({ type?: string } & Record<string, unknown>) | null =
+      (e?.payload && typeof e.payload === "object") ? (e.payload as { type?: string } & Record<string, unknown>)
+      : (e?.data && typeof e.data === "object" && typeof (e.data as { type?: unknown }).type === "string") ? (e.data as { type?: string } & Record<string, unknown>)
+      : (typeof e?.type === "string") ? (e as { type?: string } & Record<string, unknown>)
+      : null
     if (!payload || typeof payload.type !== "string") return
     const t = payload.type
     switch (t) {
@@ -165,4 +184,36 @@ function stringifyErr(err: unknown): string {
   } catch {
     return String(err)
   }
+}
+
+/**
+ * The SDK has shipped at least three event() return shapes over its 1.14.x
+ * line. Find the AsyncIterable in whichever shape we got, or null if none.
+ */
+function pickAsyncIterable(value: unknown): AsyncIterable<unknown> | null {
+  if (!value) return null
+  // Shape 1: the value IS the iterable.
+  if (typeof (value as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function") {
+    return value as AsyncIterable<unknown>
+  }
+  // Shape 2: { stream: AsyncGenerator } — the >=1.14.51 ServerSentEventsResult.
+  const s = (value as { stream?: unknown }).stream
+  if (s && typeof (s as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function") {
+    return s as AsyncIterable<unknown>
+  }
+  // Shape 3: { data: { stream: ... } } — wrapped data envelope.
+  const d = (value as { data?: { stream?: unknown } }).data
+  if (d && typeof d === "object") {
+    const inner = (d as { stream?: unknown }).stream
+    if (inner && typeof (inner as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function") {
+      return inner as AsyncIterable<unknown>
+    }
+  }
+  return null
+}
+
+function describeShape(value: unknown): string {
+  if (value == null) return String(value)
+  if (typeof value !== "object") return typeof value
+  return `object keys=[${Object.keys(value as object).join(",")}]`
 }

@@ -435,14 +435,64 @@ OAUTHMSG
   # Pass --method too if the setup wizard staged one (KIDS_OAUTH_METHOD).
   # Without it opencode would still show its own method picker and the kid
   # would be confused: "I already chose Pro/Plus in the wizard, why ask?"
-  set +e
-  if [ -n "${KIDS_OAUTH_METHOD:-}" ]; then
-    opencode auth login --provider "$KIDS_OAUTH_PROVIDER" --method "$KIDS_OAUTH_METHOD"
-  else
-    opencode auth login --provider "$KIDS_OAUTH_PROVIDER"
+  #
+  # We also auto-open the first https URL opencode prints (the device-flow
+  # authorization URL) using macOS `open` or Linux `xdg-open`. opencode
+  # usually opens the browser itself, but on some macOS setups it doesn't
+  # (sandbox / Default Browser handler glitches) and the kid sees a URL
+  # they're supposed to copy by hand. This is a no-op fallback — if
+  # opencode already opened the browser, the second `open URL` just
+  # re-focuses the existing tab.
+  AUTO_OPEN_PIPE="$(mktemp -u -t kids-oauth-url 2>/dev/null || echo "/tmp/kids-oauth-url.$$")"
+  mkfifo "$AUTO_OPEN_PIPE" 2>/dev/null || AUTO_OPEN_PIPE=""
+
+  AUTO_OPEN_PID=""
+  if [ -n "$AUTO_OPEN_PIPE" ]; then
+    (
+      while IFS= read -r line; do
+        url=$(printf '%s' "$line" | grep -oE 'https?://[^[:space:]]+' | head -n 1 || true)
+        if [ -n "$url" ]; then
+          if command -v open >/dev/null 2>&1; then
+            open "$url" >/dev/null 2>&1 || true
+          elif command -v xdg-open >/dev/null 2>&1; then
+            xdg-open "$url" >/dev/null 2>&1 || true
+          fi
+          break
+        fi
+      done < "$AUTO_OPEN_PIPE" 2>/dev/null
+    ) &
+    AUTO_OPEN_PID=$!
   fi
-  AUTH_RC=$?
+
+  set +e
+  if [ -n "$AUTO_OPEN_PIPE" ]; then
+    if [ -n "${KIDS_OAUTH_METHOD:-}" ]; then
+      opencode auth login --provider "$KIDS_OAUTH_PROVIDER" --method "$KIDS_OAUTH_METHOD" 2>&1 | tee "$AUTO_OPEN_PIPE"
+      AUTH_RC=${PIPESTATUS[0]}
+    else
+      opencode auth login --provider "$KIDS_OAUTH_PROVIDER" 2>&1 | tee "$AUTO_OPEN_PIPE"
+      AUTH_RC=${PIPESTATUS[0]}
+    fi
+  else
+    # Fifo creation failed (rare) — fall back to plain invocation; the kid
+    # still gets to paste the URL manually.
+    if [ -n "${KIDS_OAUTH_METHOD:-}" ]; then
+      opencode auth login --provider "$KIDS_OAUTH_PROVIDER" --method "$KIDS_OAUTH_METHOD"
+    else
+      opencode auth login --provider "$KIDS_OAUTH_PROVIDER"
+    fi
+    AUTH_RC=$?
+  fi
   set -e
+
+  # Clean up the URL watcher + fifo.
+  if [ -n "$AUTO_OPEN_PID" ]; then
+    kill "$AUTO_OPEN_PID" >/dev/null 2>&1 || true
+    wait "$AUTO_OPEN_PID" 2>/dev/null || true
+  fi
+  if [ -n "$AUTO_OPEN_PIPE" ]; then
+    rm -f "$AUTO_OPEN_PIPE"
+  fi
 
   if [ "$AUTH_RC" -ne 0 ]; then
     echo "Kids OpenCode: opencode auth login exited $AUTH_RC. Run kids-opencode again to retry." >&2
