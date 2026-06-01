@@ -83,6 +83,25 @@ interface AppHandlers {
 }
 
 async function main(): Promise<void> {
+  // Switch to the terminal's alternate screen buffer so Ink draws on a
+  // canvas isolated from whatever was in the terminal before us — most
+  // importantly the green "Complete authorization…" lines printed by
+  // `opencode auth login` between two execs of kids-client. On exit, the
+  // kid's original terminal contents (incl. scrollback) come back.
+  //
+  // NOTE: do NOT install SIGINT/SIGTERM handlers here — the existing
+  // `process.on("SIGINT", () => void services.quit())` registration below
+  // is the cleanup owner; double-handling closed the raw-mode stdin out
+  // from under Ink and surfaced as "EIO on fd 8" when the kid pressed Esc.
+  // The "exit" listener alone is enough to restore the terminal for normal
+  // exits + the OAuth handoff `process.exit(OAUTH_HANDOFF_EXIT_CODE)`.
+  if (process.stdout.isTTY) {
+    process.stdout.write("\x1b[?1049h\x1b[H")
+    process.on("exit", () => {
+      try { process.stdout.write("\x1b[?1049l") } catch { /* terminal already closed */ }
+    })
+  }
+
   const env: KidsClientEnv = readEnv()
   const store = new Store()
   const installedPacks = listInstalledPacks()
