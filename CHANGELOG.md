@@ -8,6 +8,17 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+## [0.0.18] — 2026-05-31
+
+### Added
+- **Voice input — "press Space to talk" in the mission screen.** Space (when idle and not mid-typing) starts recording, Enter/Space stops, Esc cancels. Built on a pure `core/voice/` engine (VoiceController state machine + Recorder + STT adapter + VAD) bridged to Ink via `useVoiceInput`. Degrades-don't-crash: demo mode when `sox`/`ffmpeg` is absent, MockStt when DeepRouter STT creds are missing, so a missing key never crashes. (WIP: the meter is a "recording" pulse, not true mic energy; real-energy VAD auto-stop is still to come.)
+
+### Fixed
+- **Layout cascade** — the App root Box is pinned to the terminal width × height so nested borders stop cascading/overflowing on resize.
+
+### Changed
+- `MissionScreen` Esc is unified across voice + navigation: while recording it cancels voice; otherwise it interrupts a thinking AI, clears a half-typed draft, or (idle + empty) returns to the startup menu.
+
 ## [0.0.17] — 2026-05-31
 
 Dogfood-driven bugfix release. 0.0.16 was unusable — the AI engine never started — plus several
