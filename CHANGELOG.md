@@ -8,6 +8,21 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+## [0.0.22] — 2026-06-01
+
+### Added (UX parity, phase B)
+- **Richer chat rendering** for the AI's replies — fenced ```code``` blocks render in a bordered,
+  colored box (with a language label); headings, bullet lists, inline **bold** and `code` are
+  formatted. No heavy dependency — a small built-in renderer (`MessageBody`). Kid/system messages
+  stay plain. Handles an unterminated code fence mid-stream.
+
+### Notes
+- Phase C of the gap-closing plan: **scrollback already works** via the terminal's own scroll
+  (finished messages are printed through Ink `<Static>`, i.e. into the terminal scrollback —
+  mouse-wheel / Shift-PgUp). **Multi-line input is deferred** on purpose: `ink-text-input` is
+  single-line and a custom multi-line input is high-risk against the tuned key handling
+  (voice / ↑-history / @ / Esc / `/`) for little kid-facing benefit.
+
 ## [0.0.21] — 2026-06-01
 
 ### Added (UX parity, phase A)
