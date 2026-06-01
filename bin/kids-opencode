@@ -318,6 +318,7 @@ fi
 # tour wired but the old client doesn't render them).
 KIDS_CLIENT_BIN=""
 for candidate in \
+  "$THIS_DIR/../packages/kids-client/bin/kids-client" \
   "$THIS_DIR/../../kids-client/bin/kids-client" \
   "$THIS_DIR/../../@kidsinai/kids-client/bin/kids-client" \
   "$THIS_DIR/../node_modules/@kidsinai/kids-client/bin/kids-client" \
