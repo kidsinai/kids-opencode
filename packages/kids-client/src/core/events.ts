@@ -66,6 +66,14 @@ export class EventSubscriber {
     this.abort.abort()
   }
 
+  private dbg(message: string, fields?: Record<string, unknown>): void {
+    // Lazy require to avoid a hard dep cycle if debug.ts grows imports.
+    try {
+      const { debug } = require("./debug.ts") as { debug: (m: string, f?: Record<string, unknown>) => void }
+      debug(`[events] ${message}`, fields)
+    } catch { /* never let logging block events */ }
+  }
+
   private async consume(): Promise<void> {
     // The SDK exposes the SSE stream via client.global.event(). The shape
     // has changed across SDK versions:
@@ -78,19 +86,24 @@ export class EventSubscriber {
     if (!eventApi || typeof eventApi.event !== "function") {
       throw new Error("@opencode-ai/sdk/v2: client.global.event() not available — SDK version drift")
     }
+    this.dbg("consume: calling event()")
     const result = await Promise.resolve(eventApi.event())
+    this.dbg("consume: event() returned", { shape: describeShape(result) })
     const iterable = pickAsyncIterable(result)
     if (!iterable) {
       throw new Error(`@opencode-ai/sdk/v2: client.global.event() returned an unrecognised shape: ${describeShape(result)}`)
     }
+    this.dbg("consume: got iterable, awaiting SSE events…")
     for await (const raw of iterable) {
       if (this.abort.signal.aborted) return
       if (this.retries > 0) {
         this.retries = 0
         this.handlers.onReconnected?.()
       }
+      this.dbg("consume: raw event", { preview: previewRaw(raw) })
       this.dispatch(raw)
     }
+    this.dbg("consume: iterable ended")
   }
 
   private dispatch(raw: unknown): void {
@@ -238,4 +251,13 @@ function describeShape(value: unknown): string {
   if (value == null) return String(value)
   if (typeof value !== "object") return typeof value
   return `object keys=[${Object.keys(value as object).join(",")}]`
+}
+
+function previewRaw(raw: unknown): string {
+  try {
+    const s = JSON.stringify(raw)
+    return s.length > 220 ? s.slice(0, 220) + "…" : s
+  } catch {
+    return describeShape(raw)
+  }
 }
