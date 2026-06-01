@@ -94,63 +94,85 @@ export class EventSubscriber {
   }
 
   private dispatch(raw: unknown): void {
-    // Across SDK versions an event is either:
-    //   • { payload: { type, …fields } }            (older shape)
-    //   • { type, …fields }                          (newer shape — yielded
-    //                                                  directly by the
-    //                                                  AsyncGenerator)
-    //   • { data: { type, …fields } } (StreamEvent wrapper from some helpers)
-    // Unwrap to a single `payload` view so the switch below stays the same.
+    // The SDK shape evolved over the 1.14.x line. Yielded events arrive as:
+    //   • { payload: { type, properties: { … } } }   (current — 1.14.51 GlobalEvent)
+    //   • { payload: { type, …flatfields } }         (older — flat fields on payload)
+    //   • { type, properties: { … } }                (some intermediate releases)
+    //   • { type, …flatfields }                      (oldest)
+    //   • { data: { type, …. } }                     (StreamEvent helper wrapper)
+    //
+    // CRITICAL: the current 1.14.51 GlobalEvent puts event fields
+    // (sessionID, messageID, delta, …) under .payload.properties, NOT
+    // directly on .payload. The previous code read .payload.sessionID
+    // (always undefined), so deltas were silently dropped and the
+    // "thinking" indicator never cleared. This split + the
+    // `props ?? payload` fallback handle both layouts uniformly.
     const e = raw as { payload?: Record<string, unknown>; data?: Record<string, unknown>; type?: string } & Record<string, unknown>
-    const payload: ({ type?: string } & Record<string, unknown>) | null =
-      (e?.payload && typeof e.payload === "object") ? (e.payload as { type?: string } & Record<string, unknown>)
-      : (e?.data && typeof e.data === "object" && typeof (e.data as { type?: unknown }).type === "string") ? (e.data as { type?: string } & Record<string, unknown>)
-      : (typeof e?.type === "string") ? (e as { type?: string } & Record<string, unknown>)
+    const payload: ({ type?: string; properties?: Record<string, unknown> } & Record<string, unknown>) | null =
+      (e?.payload && typeof e.payload === "object") ? (e.payload as { type?: string; properties?: Record<string, unknown> } & Record<string, unknown>)
+      : (e?.data && typeof e.data === "object" && typeof (e.data as { type?: unknown }).type === "string") ? (e.data as { type?: string; properties?: Record<string, unknown> } & Record<string, unknown>)
+      : (typeof e?.type === "string") ? (e as { type?: string; properties?: Record<string, unknown> } & Record<string, unknown>)
       : null
     if (!payload || typeof payload.type !== "string") return
-    const t = payload.type
+    let t = payload.type
+    // Where the actual event fields live: `.properties` (Event* legacy shape)
+    // OR `.data` (SyncEvent* shape) OR flat on payload (oldest).
+    let props: Record<string, unknown> = (payload.properties && typeof payload.properties === "object")
+      ? payload.properties as Record<string, unknown>
+      : payload
+    // 1.14.51 Sync events: type="sync", real event name in .name with a
+    // version suffix like ".1", fields under .data. Without this normalize,
+    // our switch never matches and streaming text events drop on the floor
+    // (kid sees "thinking..." forever).
+    if (t === "sync" && typeof (payload as { name?: unknown }).name === "string") {
+      t = String((payload as { name: string }).name).replace(/\.\d+$/, "")
+      const dataField = (payload as { data?: unknown }).data
+      if (dataField && typeof dataField === "object") {
+        props = dataField as Record<string, unknown>
+      }
+    }
     switch (t) {
       case "session.created":
       case "session.next.session.created":
-        this.handlers.onSessionCreated?.({ sessionID: String(payload.sessionID ?? "") })
+        this.handlers.onSessionCreated?.({ sessionID: String(props.sessionID ?? "") })
         return
       case "message.part.delta": {
-        const messageID = String(payload.messageID ?? "")
-        const partID = String(payload.partID ?? "")
-        const sessionID = String(payload.sessionID ?? "")
-        const delta = String((payload.delta as { text?: string } | undefined)?.text ?? payload.delta ?? "")
+        const messageID = String(props.messageID ?? "")
+        const partID = String(props.partID ?? "")
+        const sessionID = String(props.sessionID ?? "")
+        const delta = String((props.delta as { text?: string } | undefined)?.text ?? props.delta ?? "")
         if (delta) this.handlers.onMessagePartDelta?.({ sessionID, messageID, partID, delta })
         return
       }
       case "session.next.text.delta": {
-        const messageID = String(payload.messageID ?? "")
-        const partID = String(payload.partID ?? "stream")
-        const sessionID = String(payload.sessionID ?? "")
-        const delta = String(payload.delta ?? "")
+        const messageID = String(props.messageID ?? "")
+        const partID = String(props.partID ?? "stream")
+        const sessionID = String(props.sessionID ?? "")
+        const delta = String(props.delta ?? "")
         if (delta) this.handlers.onMessagePartDelta?.({ sessionID, messageID, partID, delta })
         return
       }
       case "session.next.text.ended": {
-        const messageID = String(payload.messageID ?? "")
-        const sessionID = String(payload.sessionID ?? "")
+        const messageID = String(props.messageID ?? "")
+        const sessionID = String(props.sessionID ?? "")
         this.handlers.onTextEnded?.({ sessionID, messageID })
         return
       }
       case "permission.asked":
       case "session.next.permission.asked": {
-        const requestID = String(payload.requestID ?? payload.id ?? "")
-        const sessionID = String(payload.sessionID ?? "")
+        const requestID = String(props.requestID ?? props.id ?? "")
+        const sessionID = String(props.sessionID ?? "")
         this.handlers.onPermissionAsked?.({
           requestID,
           sessionID,
-          tool: payload.tool as string | undefined,
-          metadata: payload.metadata as Record<string, unknown> | undefined,
+          tool: props.tool as string | undefined,
+          metadata: props.metadata as Record<string, unknown> | undefined,
         })
         return
       }
       case "session.error":
       case "llm.error": {
-        const message = String((payload.error as { message?: string } | undefined)?.message ?? payload.message ?? "unknown LLM error")
+        const message = String((props.error as { message?: string } | undefined)?.message ?? props.message ?? "unknown LLM error")
         this.handlers.onLlmError?.({ message })
         return
       }
