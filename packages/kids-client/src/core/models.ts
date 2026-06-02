@@ -69,3 +69,28 @@ function pickModels(models: unknown): unknown[] {
   if (models && typeof models === "object") return Object.values(models)
   return []
 }
+
+/** True when an LLM error is about the *model itself* (not auth/network) — e.g.
+ *  a model the current ChatGPT-account auth isn't allowed to use. The fix is to
+ *  switch models, so callers should re-pick rather than retry or re-auth. */
+export function isModelUnavailable(msg: string): boolean {
+  const m = msg.toLowerCase()
+  return m.includes("not supported")
+    || m.includes("model_not_found")
+    || m.includes("does not have access")
+    || m.includes("not available")
+    || m.includes("unsupported model")
+}
+
+/** Pick a kid-safe default model: prefer the small/standard tiers that work
+ *  with ChatGPT-account auth; skip the `-pro` tiers (API-key only, rejected by
+ *  the Codex/OAuth path). Returns null only if the server reports no models. */
+export function pickDefaultModel(models: ModelChoice[]): ModelChoice | null {
+  const usable = models.filter((m) => !/-pro\b/i.test(m.id))
+  const prefer = ["gpt-5.4-mini", "gpt-5.4", "claude-3-5-sonnet", "sonnet", "gpt-5.5"]
+  for (const p of prefer) {
+    const hit = usable.find((m) => m.id.toLowerCase().includes(p))
+    if (hit) return hit
+  }
+  return usable[0] ?? models[0] ?? null
+}

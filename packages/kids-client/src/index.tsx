@@ -31,7 +31,7 @@ import { listInstalledPacks, resolveContext } from "./core/course-pack.ts"
 import { readLastSession, writeLastSession } from "./core/last-session.ts"
 import { isCompletionTrigger, runCheck } from "./core/check-runner.ts"
 import { parseSlash, matchCommand } from "./core/commands.ts"
-import { listModels } from "./core/models.ts"
+import { listModels, isModelUnavailable, pickDefaultModel } from "./core/models.ts"
 import { findFiles } from "./core/files.ts"
 import { App } from "./render/ink/App.tsx"
 import { FREE_PLAY_PACK_ID } from "./render/ink/screens/CoursePackPicker.tsx"
@@ -652,10 +652,32 @@ function makeFullHandlers(
 
       store.update({ thinking: true })
       updateLastSession()
+      // Resolve a usable model up front. With no explicit pick, the server
+      // falls back to whatever model it last used — which may be one the
+      // current auth can't use (a ChatGPT-account login can't use gpt-5.5-pro).
+      // Pinning a known-good default makes the kid's first message just work.
+      let model = snap.selectedModel
+      if (!model) {
+        const def = pickDefaultModel(await listModels(client))
+        if (def) {
+          model = def.id
+          store.update({ selectedModel: def.id, selectedModelLabel: def.label })
+        }
+      }
       try {
-        await session.prompt(text, { model: snap.selectedModel ?? undefined })
+        await session.prompt(text, { model: model ?? undefined })
       } catch (err) {
         const detail = errMessage(err)
+        if (isModelUnavailable(detail)) {
+          // The model isn't usable on this account (e.g. a -pro model under a
+          // ChatGPT login). Clear it so the next message auto-picks a good
+          // default, and guide the kid to /model instead of a scary error.
+          store.update({ thinking: false, selectedModel: null, selectedModelLabel: null })
+          sysMessage(env.locale === "zh-Hans"
+            ? "这个 AI 模型在你的账号下用不了。直接再发一条消息会自动换成可用模型，或打 /model 自己选（推荐 gpt-5.4-mini）。"
+            : "That AI model isn't available on your account. Just send again to auto-switch to a usable one, or type /model to choose (try gpt-5.4-mini).")
+          return
+        }
         store.update({ thinking: false, screen: { kind: "error", variant: classifyLlmError(detail), detail } })
       }
     },
