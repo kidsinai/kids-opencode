@@ -67,11 +67,13 @@ export class SessionManager {
    */
   async loadMessages(sessionID: string): Promise<ChatMessage[]> {
     this.currentSessionId = sessionID
-    const api = (this.client as unknown as { session?: { messages?: (p: unknown) => Promise<unknown> } }).session
+    const api = (this.client as unknown as { session?: { messages?: (p: unknown, o?: unknown) => Promise<unknown> } }).session
     if (typeof api?.messages !== "function") return []
     let raw: unknown
     try {
-      raw = await api.messages({ sessionID, order: "asc", limit: 200 })
+      // SDK v2 flat params: `sessionID` → path, `limit` → query. There is no
+      // `order` param — the route already returns messages chronologically.
+      raw = await api.messages({ sessionID, limit: 200 }, SDK_THROW)
     } catch {
       return []
     }
@@ -104,15 +106,18 @@ export class SessionManager {
     const sessionID = this.currentSessionId!
     const api = (this.client as unknown as { session?: { prompt: (parameters: unknown, options?: unknown) => Promise<unknown> } }).session
     if (!api?.prompt) throw new Error("SDK v2: client.session.prompt unavailable")
-    // SDK 1.14.51 signature: single parameters object, kid's text under .prompt.text.
-    // Pass SDK_THROW so 4xx/5xx surface as exceptions instead of getting
-    // silently swallowed (the bug behind the "thinking…" hang).
+    // SDK v2 prompt takes ONE flat params object; buildClientParams routes
+    // `sessionID` → URL path and `parts`/`model`/`agent` → body. A flat
+    // { sessionID, prompt:{text} } leaves body undefined — serve 1.15.x rejects
+    // it ("Expected object" / "Missing key parts"), which surfaced as endless
+    // "thinking…" then a Network-trouble error. Verified against 1.15.x: this
+    // shape returns 200. Pass SDK_THROW so 4xx/5xx surface as exceptions.
     // `model` (from the /model picker) is a "providerID/modelID" string; the SDK
     // wants it split into { providerID, modelID }.
     const model = splitModelId(opts?.model)
     const payload = {
       sessionID,
-      prompt: { text },
+      parts: [{ type: "text", text }],
       ...(model ? { model } : {}),
       ...(opts?.agent ? { agent: opts.agent } : {}),
     }
@@ -163,38 +168,43 @@ function splitModelId(id: string | undefined): { providerID: string; modelID: st
 
 /** session.messages returns `{ items }` or `{ data: { items } }`. */
 function unwrapItems(result: unknown): unknown[] {
+  if (Array.isArray(result)) return result
   if (result && typeof result === "object") {
-    const r = result as { items?: unknown; data?: { items?: unknown } }
+    const r = result as { items?: unknown; data?: unknown }
     if (Array.isArray(r.items)) return r.items
-    if (Array.isArray(r.data?.items)) return r.data!.items as unknown[]
+    // SDK v2 with throwOnError returns { data: T[], request, response }.
+    if (Array.isArray(r.data)) return r.data
+    const di = (r.data as { items?: unknown })?.items
+    if (Array.isArray(di)) return di
   }
   return []
 }
 
-/** Map a server SessionMessage to our ChatMessage; null = skip (tool/control). */
+/**
+ * Map a server SessionMessage to our ChatMessage; null = skip (tool/control).
+ *
+ * SDK v2 list items are `{ info: Message, parts: Part[] }`: the role/id/time
+ * live on `info`, and the visible text is the concatenation of the `text`
+ * parts. (The pre-v2 flat `{ type, text, content }` shape no longer applies.)
+ */
 export function mapServerMessage(m: unknown): ChatMessage | null {
   if (!m || typeof m !== "object") return null
   const o = m as {
-    id?: string
-    type?: string
-    text?: string
-    content?: Array<{ type?: string; text?: string }>
-    time?: { created?: number }
+    info?: { id?: string; role?: string; time?: { created?: number } }
+    parts?: Array<{ type?: string; text?: string }>
   }
-  const id = o.id ?? `srv-${o.time?.created ?? 0}`
-  const ts = typeof o.time?.created === "number" ? o.time.created : 0
-  if (o.type === "user" && typeof o.text === "string") {
-    return { id, actor: "kid", text: o.text, streaming: false, ts }
-  }
-  if (o.type === "assistant" && Array.isArray(o.content)) {
-    const text = o.content
-      .filter((p) => p?.type === "text" && typeof p.text === "string")
-      .map((p) => p.text)
-      .join("")
-      .trim()
-    if (!text) return null
-    return { id, actor: "agent", text, streaming: false, ts }
-  }
+  const info = o.info
+  if (!info || typeof info !== "object") return null
+  const id = info.id ?? `srv-${info.time?.created ?? 0}`
+  const ts = typeof info.time?.created === "number" ? info.time.created : 0
+  const text = (Array.isArray(o.parts) ? o.parts : [])
+    .filter((p) => p?.type === "text" && typeof p.text === "string")
+    .map((p) => p.text)
+    .join("")
+    .trim()
+  if (!text) return null
+  if (info.role === "user") return { id, actor: "kid", text, streaming: false, ts }
+  if (info.role === "assistant") return { id, actor: "agent", text, streaming: false, ts }
   return null
 }
 
