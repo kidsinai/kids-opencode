@@ -23,7 +23,7 @@ interface StartupScreenProps {
   locale: "zh-Hans" | "en"
   coursePack: string | null
   toast: ToastState | null
-  onStart: (mode: "free" | "course" | "resume" | "help") => void
+  onStart: (mode: "free" | "course" | "resume" | "help" | "settings") => void
   onOpenWallet: () => void
   onQuit: () => void
 }
@@ -36,6 +36,7 @@ export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet
     else if (input === "f") onStart("free")
     else if (input === "r") onStart("resume")
     else if (input === "w" || input === "W") onOpenWallet()
+    else if (input === "s" || input === "S") onStart("settings")
     else if (input === "h") onStart("help")
     else if (input === "q" || input === "Q") onQuit()
   })
@@ -64,6 +65,7 @@ export function StartupScreen({ locale, coursePack, toast, onStart, onOpenWallet
           { key: "f", label: t.startFree },
           { key: "r", label: t.resume },
           { key: "w", label: t.wallet },
+          { key: "s", label: t.settings },
           { key: "h", label: t.help },
           { key: "q", label: t.quit },
         ]} />
@@ -90,6 +92,7 @@ const STRINGS = {
     pickCourse: "选 Course Pack",
     resume: "继续上次",
     wallet: "钱包 / 充值（开浏览器）",
+    settings: "设置 / 换模型",
     help: "帮助",
     quit: "退出",
   },
@@ -105,6 +108,7 @@ const STRINGS = {
     pickCourse: "Pick a Course Pack",
     resume: "Resume last session",
     wallet: "Wallet / Top up (opens browser)",
+    settings: "Settings / change model",
     help: "Help",
     quit: "Quit",
   },

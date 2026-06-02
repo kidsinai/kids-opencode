@@ -54,7 +54,7 @@ interface ServiceSet {
 }
 
 interface FullHandlers {
-  onStart: (mode: "free" | "course" | "resume" | "help") => void
+  onStart: (mode: "free" | "course" | "resume" | "help" | "settings") => void
   onPrompt: (text: string) => Promise<void>
   onPermissionReply: (decision: "allow" | "deny" | "edit") => Promise<void>
   onAbort: () => Promise<void>
@@ -66,7 +66,7 @@ interface FullHandlers {
 }
 
 interface AppHandlers {
-  onStart: (mode: "free" | "course" | "resume" | "help") => void
+  onStart: (mode: "free" | "course" | "resume" | "help" | "settings") => void
   onPrompt: (text: string) => void
   onPermissionReply: (decision: "allow" | "deny" | "edit") => void
   onDangerousAcknowledge: () => void
@@ -212,7 +212,7 @@ function makeHandlers(
   }
 
   return {
-    onStart: ifBooted((s, mode: "free" | "course" | "resume" | "help") => s.handlers.onStart(mode)),
+    onStart: ifBooted((s, mode: "free" | "course" | "resume" | "help" | "settings") => s.handlers.onStart(mode)),
     onPrompt: ifBooted((s, text: string) => s.handlers.onPrompt(text)),
     onPermissionReply: ifBooted((s, d: "allow" | "deny" | "edit") => s.handlers.onPermissionReply(d)),
     onDangerousAcknowledge: () => store.update({ dangerousTopic: null }),
@@ -571,6 +571,11 @@ function makeFullHandlers(
         store.update({ screen: { kind: "help" } })
         return
       }
+      if (mode === "settings") {
+        // Re-open the setup wizard to change provider / API key / model.
+        store.update({ screen: { kind: "setup" } })
+        return
+      }
       if (mode === "course") {
         store.update({ screen: { kind: "course_picker" } })
         return
@@ -650,7 +655,8 @@ function makeFullHandlers(
       try {
         await session.prompt(text, { model: snap.selectedModel ?? undefined })
       } catch (err) {
-        store.update({ thinking: false, screen: { kind: "error", variant: "network_down", detail: errMessage(err) } })
+        const detail = errMessage(err)
+        store.update({ thinking: false, screen: { kind: "error", variant: classifyLlmError(detail), detail } })
       }
     },
     onPermissionReply: async (decision) => {
@@ -840,7 +846,7 @@ function handlePluginAudit(event: unknown, store: Store): void {
  * codes like WALLET_INSUFFICIENT / FAMILY_PAUSED (platform-backend §7) or
  * plain English ("insufficient credits", "rate limit", "402").
  */
-function classifyLlmError(msg: string): "stars_exhausted" | "network_down" {
+function classifyLlmError(msg: string): "stars_exhausted" | "auth_failed" | "network_down" {
   const m = msg.toLowerCase()
   if (
     m.includes("wallet_insufficient")
@@ -852,6 +858,21 @@ function classifyLlmError(msg: string): "stars_exhausted" | "network_down" {
     || m.includes("402")
   ) {
     return "stars_exhausted"
+  }
+  // Auth/sign-in failures (e.g. ChatGPT OAuth token invalidated, 401) are NOT
+  // network problems — the fix is to re-authenticate, so route to the
+  // reconfigurable error screen instead of the dead-end "can't reach AI".
+  if (
+    m.includes("token_invalidated")
+    || m.includes("authentication token")
+    || m.includes("sign in again")
+    || m.includes("signing in")
+    || m.includes("invalidated")
+    || m.includes("unauthorized")
+    || m.includes("invalid_api_key")
+    || m.includes("401")
+  ) {
+    return "auth_failed"
   }
   return "network_down"
 }

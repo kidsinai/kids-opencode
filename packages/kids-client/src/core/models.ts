@@ -17,8 +17,13 @@ export async function listModels(client: OpencodeClient): Promise<ModelChoice[]>
   }
   let raw: unknown
   try {
-    if (typeof api.provider?.list === "function") raw = await api.provider.list()
-    else if (typeof api.config?.providers === "function") raw = await api.config.providers()
+    // Prefer config.providers: it returns the configured/usable providers as
+    // { providers:[{id,models:[…]}], default } which flattenModels understands.
+    // provider.list returns the full models.dev catalog in a different shape
+    // ({ all, connected, default }) that flattens to 0 — that mismatch was why
+    // the /model picker showed "No models available". Verified vs serve 1.15.x.
+    if (typeof api.config?.providers === "function") raw = await api.config.providers()
+    else if (typeof api.provider?.list === "function") raw = await api.provider.list()
     else return []
   } catch {
     return []

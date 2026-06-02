@@ -42,7 +42,7 @@ export interface AppDeps {
   store: Store
   locale: "zh-Hans" | "en"
   installedPacks: InstalledPack[]
-  onStart: (mode: "free" | "course" | "resume" | "help") => void
+  onStart: (mode: "free" | "course" | "resume" | "help" | "settings") => void
   onPrompt: (text: string) => void
   onPermissionReply: (decision: "allow" | "deny" | "edit") => void
   onDangerousAcknowledge: () => void
