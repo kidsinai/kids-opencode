@@ -12,6 +12,21 @@
 import { spawn, type Subprocess } from "bun"
 import { buildAuthHeader } from "./connection.ts"
 
+/**
+ * Overall budget for the readiness poll. First boot in a large repo (file
+ * watcher + git + plugin load) can take >10s, so give it room before we
+ * surface a serve_unreachable error.
+ */
+const DEFAULT_READY_TIMEOUT_MS = 30_000
+/**
+ * Per-probe ceiling. CRITICAL: Bun's `fetch` has no default timeout, so a
+ * serve that ACCEPTS the connection but stalls mid-bootstrap (holds `/app`
+ * open without sending headers) would hang the probe — and therefore
+ * `ensureReady()` — forever, freezing the kid on "Starting AI engine…". An
+ * AbortSignal bounds every probe so a stuck serve becomes a retry, not a hang.
+ */
+const DEFAULT_PROBE_TIMEOUT_MS = 2_000
+
 export type ServeReadiness =
   | { kind: "already_running" }
   | { kind: "spawned"; pid: number }
@@ -41,8 +56,10 @@ export interface ServeManagerOptions {
    */
   serverUsername: string
   opencodeBin: string
-  /** Max wait for readiness probe in ms. Default 10s. */
+  /** Max total wait for readiness in ms. Default {@link DEFAULT_READY_TIMEOUT_MS}. */
   readyTimeoutMs?: number
+  /** Per-probe abort ceiling in ms. Default {@link DEFAULT_PROBE_TIMEOUT_MS}. */
+  probeTimeoutMs?: number
   /** Called for every parsed `[kids-audit]` JSON line on stderr. */
   onAuditLine?: (event: unknown) => void
   /** Called for every other (non-audit) stderr line. Useful for debug log. */
@@ -92,7 +109,7 @@ export class ServeManager {
 
     if (proc.stderr) void this.pipeStderr(proc.stderr)
 
-    const timeout = this.opts.readyTimeoutMs ?? 10_000
+    const timeout = this.opts.readyTimeoutMs ?? DEFAULT_READY_TIMEOUT_MS
     const start = Date.now()
     let lastError = "no response"
     while (Date.now() - start < timeout) {
@@ -132,9 +149,14 @@ export class ServeManager {
         headers: {
           authorization: buildAuthHeader(this.opts.serverUsername, this.opts.serverPassword),
         },
+        // Without this, a serve that accepts the socket but stalls mid-boot
+        // hangs the probe forever (Bun fetch has no default timeout).
+        signal: AbortSignal.timeout(this.opts.probeTimeoutMs ?? DEFAULT_PROBE_TIMEOUT_MS),
       })
       return classifyProbeStatus(res.status)
     } catch {
+      // AbortError (timeout) and connection-refused both land here → treat as
+      // "nobody answering yet" so ensureReady() retries instead of freezing.
       return "offline"
     }
   }
