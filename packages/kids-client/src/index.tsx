@@ -20,6 +20,7 @@
 import React from "react"
 import { render } from "ink"
 import { join } from "node:path"
+import { readFileSync } from "node:fs"
 import { readEnv, validateEnv, type KidsClientEnv } from "./core/env.ts"
 import { ServeManager } from "./core/serve-manager.ts"
 import { createKidsClient, type OpencodeClient } from "./core/connection.ts"
@@ -344,6 +345,7 @@ async function bootServices(env: KidsClientEnv, store: Store): Promise<ServiceSe
     serverPassword: env.opencodeServerPassword,
     serverUsername: env.opencodeServerUsername,
     opencodeBin: env.opencodeBin,
+    opencodeConfigContent: buildServeConfig(env.configDir),
     onAuditLine: (event) => {
       audit.push(event)
       store.pushAudit(event)
@@ -913,6 +915,34 @@ function flashToast(store: Store, toast: { kind: "info" | "warn" | "success"; te
 function errMessage(err: unknown): string {
   if (err instanceof Error) return err.message
   return String(err)
+}
+
+/**
+ * Build the inline opencode config passed to the spawned serve. opencode's
+ * own global config is effectively empty, so without this it defaults the
+ * openai provider to gpt-5.5-pro (rejected by ChatGPT-account auth) with no
+ * permission gate. We forward a curated, schema-clean subset of the kids
+ * preset: a usable default model + the kid-safety "ask before acting" gate.
+ *
+ * Deliberately NOT forwarded: the preset's `agent.tools` / `_comment` keys —
+ * they fail opencode's config schema (which silently drops the whole config).
+ * The tool whitelist is enforced by the kids plugin regardless, so nothing is
+ * lost. Returns undefined if the preset is missing/unreadable (serve then
+ * falls back to its own config — same as before this change).
+ */
+function buildServeConfig(configDir: string): string | undefined {
+  let model = "openai/gpt-5.4-mini"
+  try {
+    const preset = JSON.parse(readFileSync(join(configDir, "opencode.json"), "utf8")) as { model?: string }
+    if (typeof preset.model === "string" && preset.model.includes("/")) model = preset.model
+  } catch {
+    return undefined
+  }
+  return JSON.stringify({
+    $schema: "https://opencode.ai/config.json",
+    model,
+    permission: { edit: "ask", write: "ask", bash: "ask", webfetch: "ask" },
+  })
 }
 
 void main().catch((err) => {

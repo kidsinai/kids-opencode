@@ -56,6 +56,16 @@ export interface ServeManagerOptions {
    */
   serverUsername: string
   opencodeBin: string
+  /**
+   * Inline opencode config (JSON string) passed to the spawned serve via
+   * OPENCODE_CONFIG_CONTENT. opencode otherwise reads the empty global config
+   * and falls back to a default model the ChatGPT-account auth can't use
+   * (gpt-5.5-pro) with permissions unset. Passing a curated `{ model,
+   * permission }` here pins a usable default model AND enforces the kid-safety
+   * "ask before write/edit" gate at the source. (OPENCODE_CONFIG as a file
+   * path is unreliable; the inline content var is what opencode honors.)
+   */
+  opencodeConfigContent?: string
   /** Max total wait for readiness in ms. Default {@link DEFAULT_READY_TIMEOUT_MS}. */
   readyTimeoutMs?: number
   /** Per-probe abort ceiling in ms. Default {@link DEFAULT_PROBE_TIMEOUT_MS}. */
@@ -101,6 +111,9 @@ export class ServeManager {
         ...process.env,
         OPENCODE_SERVER_PASSWORD: this.opts.serverPassword,
         OPENCODE_SERVER_USERNAME: this.opts.serverUsername,
+        ...(this.opts.opencodeConfigContent
+          ? { OPENCODE_CONFIG_CONTENT: this.opts.opencodeConfigContent }
+          : {}),
       },
       stdout: "pipe",
       stderr: "pipe",
