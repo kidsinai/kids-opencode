@@ -8,6 +8,22 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+## [0.0.24] — 2026-06-02
+
+### Changed
+- **Lock-step version re-alignment.** All four packages are back on a single version. 0.0.23 had
+  bumped CLI / client / tui-plugin but left `@kidsinai/kids-opencode-plugin` at 0.0.22 (it had no
+  changes); this release brings the plugin onto the shared number and points every internal
+  `@kidsinai/*` dependency at `^0.0.24`. No functional changes since 0.0.23.
+
+## [0.0.23] — 2026-06-02
+
+### Fixed
+- Chat / `/model` picker / boot reliability against `opencode serve` 1.15.x: working `/model`
+  picker (uses `config.providers()`), auth-aware error screens + a Settings entry, SDK v2 session
+  call-shape matches, a bounded readiness probe so a stuck serve can't freeze boot, and a top
+  padding row so screens aren't glued to the terminal edge.
+
 ## [0.0.22] — 2026-06-01
 
 ### Added (UX parity, phase B)
