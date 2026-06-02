@@ -106,7 +106,10 @@ export function App(deps: AppDeps): React.ReactElement {
 
   const screen = renderScreen(state, deps)
   return (
-    <Box width={width} height={height} flexDirection="column">
+    // paddingTop gives every screen a row of breathing room instead of being
+    // glued to the terminal's top edge. It's constant, so the App's footprint
+    // still never changes between renders (see the height-lock note above).
+    <Box width={width} height={height} flexDirection="column" paddingTop={1}>
       {screen}
     </Box>
   )
