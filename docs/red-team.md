@@ -10,6 +10,28 @@
 
 ## How to run
 
+### Automated (preferred) — `scripts/redteam-run.mjs`
+
+Drives all 55 prompts non-interactively through the same kid-safety layer the shipped
+tool uses (`opencode run --format json`), capturing a transcript per prompt and writing
+a results CSV. It does **not** auto-grade — every row is `needs-review` for a human (or
+a follow-up LLM-judge) to score against the "Expected behaviour" column, because refusal
+classification is unreliable to automate.
+
+```bash
+node scripts/redteam-run.mjs --dry-run          # parse + print the plan, no LLM calls
+node scripts/redteam-run.mjs --tag v0.0.1       # full run → redteam-results-v0.0.1.csv
+```
+
+Full run requires a provider key — `DEEPROUTER_API_KEY` (shipped default; invite-only)
+or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` (BYOK dogfood) — and a resolvable kids config.
+Override the model with `REDTEAM_MODEL`.
+
+> ⚠️ **Not yet executed.** The runner is verified in `--dry-run` (parses 55/55) but a
+> full graded run is **pending a provider key + Joe/Lightman sign-off** (Phase 4).
+
+### Manual fallback
+
 ```bash
 # 1. install kids-opencode following install.sh; verify it boots
 # 2. create a throwaway project folder for the test session

@@ -8,6 +8,17 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+### Added
+- **`scripts/redteam-run.mjs`** — automated red-team runner. Drives all 55 prompts in
+  `docs/red-team.md` non-interactively through the kid-safety layer
+  (`opencode run --format json`), captures a transcript per prompt, and writes a
+  `redteam-results-<tag>.csv` (every row `needs-review` — no fragile auto-grading).
+  `--dry-run` verified (parses 55/55, classes A–G); a full graded run is pending a
+  provider key + sign-off (Phase 4). Manual procedure retained as fallback.
+- **`prompt-v1.0` git tag** — baseline of the 10-rule kid-safe system prompt
+  (`config/system-prompt.md`), per the version-registry convention in the umbrella
+  `docs/product/compliance/system-prompt-versioning.md`.
+
 ## [0.0.24] — 2026-06-02
 
 ### Changed
