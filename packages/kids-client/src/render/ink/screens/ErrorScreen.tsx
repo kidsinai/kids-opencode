@@ -6,8 +6,8 @@
  *   auth_failed       | config_missing | ai_hung
  *
  * Each variant has a short title + a one-sentence action + an optional
- * recovery key hint. Detail text (technical) is shown dimmed in case
- * a parent / engineer needs to debug.
+ * recovery key hint. Technical detail stays in private diagnostics and is
+ * never rendered to a child or parent.
  */
 
 import React from "react"
@@ -38,7 +38,7 @@ interface ErrorScreenProps {
   onOpenWallet?: () => void
 }
 
-export function ErrorScreen({ variant, locale, detail, toast, onRetry, onQuit, onReconfigure, onOpenWallet }: ErrorScreenProps): React.ReactElement {
+export function ErrorScreen({ variant, locale, toast, onRetry, onQuit, onReconfigure, onOpenWallet }: ErrorScreenProps): React.ReactElement {
   const theme = getTheme()
   useInput((input, key) => {
     if (key.return && onRetry) onRetry()
@@ -55,13 +55,6 @@ export function ErrorScreen({ variant, locale, detail, toast, onRetry, onQuit, o
       <Box marginTop={1}>
         <Text color={theme.fg}>{t.body}</Text>
       </Box>
-      {detail && (
-        <Box marginTop={1}>
-          <Text color={theme.fgDim} dimColor>
-            {detail}
-          </Text>
-        </Box>
-      )}
       <Box marginTop={1}>
         {onRetry && (
           <Box marginRight={2}>
@@ -144,13 +137,13 @@ const STRINGS = {
     topUp: "Top up (opens browser)",
     serve_unreachable: {
       title: "AI teacher didn't start",
-      body: "The background AI service isn't running. Try again?",
+      body: "The AI teacher is not ready yet. Try again?",
       retry: "Retry",
     },
     port_taken: {
       title: "Another AI teacher is still holding the seat",
       body: "Ask a parent to open a terminal and run:\n\n  kids-opencode --shutdown\n\nThen press Enter to try again.",
-      retry: "Done — try again",
+      retry: "Done - try again",
     },
     network_down: {
       title: "Network trouble",
@@ -160,7 +153,7 @@ const STRINGS = {
     stars_exhausted: {
       title: "Out of ⭐ for today",
       body: "Great work today!\nWe'll pick this up tomorrow.\nOr press [w] so a parent can top up, then press Enter to keep going.",
-      retry: "Asked a parent — try again",
+      retry: "Asked a parent - try again",
     },
     auth_failed: {
       title: "AI doesn't recognise you",
@@ -168,8 +161,8 @@ const STRINGS = {
       retry: "Retry",
     },
     config_missing: {
-      title: "Config is missing",
-      body: "Reinstall kids-opencode to fix this.",
+      title: "Setup is incomplete",
+      body: "Ask a parent to run the setup again.",
       retry: "Retry",
     },
     ai_hung: {
