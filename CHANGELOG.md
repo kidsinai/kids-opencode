@@ -8,6 +8,10 @@ This file covers the user-facing CLI (`kids-opencode`), the plugin (`@kidsinai/k
 
 ## [Unreleased]
 
+### Changed
+- Kept technical failure detail out of the child-facing terminal error screen and simplified setup
+  and recovery copy.
+
 ### Added
 - **`scripts/redteam-run.mjs`** — automated red-team runner. Drives all 55 prompts in
   `docs/red-team.md` non-interactively through the kid-safety layer
